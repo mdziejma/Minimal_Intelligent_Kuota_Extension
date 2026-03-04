@@ -1,0 +1,66 @@
+import * as vscode from 'vscode';
+
+export function activate(context: vscode.ExtensionContext) {
+    const quotaStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+    quotaStatusBarItem.command = 'customQuotaTracker.refresh';
+    context.subscriptions.push(quotaStatusBarItem);
+
+    context.subscriptions.push(vscode.commands.registerCommand('customQuotaTracker.refresh', () => {
+        updateQuotaDisplay(quotaStatusBarItem);
+    }));
+
+    // Refresh immediately, then every 60 seconds
+    updateQuotaDisplay(quotaStatusBarItem);
+    setInterval(() => updateQuotaDisplay(quotaStatusBarItem), 60000);
+}
+
+async function updateQuotaDisplay(statusBarItem: vscode.StatusBarItem) {
+    // Note: 49967 might change on IDE restart. We can automate finding it later.
+    const url = "https://127.0.0.1:49967/exa.language_server_pb.LanguageServerService/GetCommandModelConfigs";
+
+    try {
+        // Antigravity's local server requires a POST request for this endpoint
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                // We may need to grab the x-codeium-csrf-token from the environment later
+            },
+            body: JSON.stringify({})
+        });
+
+        if (!response.ok) throw new Error("Server not responding");
+
+        const data = await response.json();
+
+        // Find the Gemini Pro model in the array (change label as needed)
+        const targetModel = data.clientModelConfigs.find((m: any) =>
+            m.label.includes("Gemini 3.1 Pro") || m.label.includes("Gemini 3 Pro")
+        );
+
+        if (targetModel && targetModel.quotaInfo) {
+            // Convert fraction (e.g., 0.8) to percentage (80%)
+            const fraction = targetModel.quotaInfo.remainingFraction;
+            const percentage = Math.round(fraction * 100);
+
+            // Format the reset time for the tooltip
+            const resetDate = new Date(targetModel.quotaInfo.resetTime);
+            const timeString = resetDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            statusBarItem.text = `$(pulse) Pro Quota: ${percentage}%`;
+            statusBarItem.tooltip = `Resets at: ${timeString}`;
+
+            // Turn red if in the Danger Zone (20% or less)
+            statusBarItem.color = percentage <= 20 ? new vscode.ThemeColor('errorForeground') : undefined;
+            statusBarItem.show();
+        }
+
+    } catch (err) {
+        console.error(err);
+        statusBarItem.text = `$(warning) Quota: Offline`;
+        statusBarItem.tooltip = "Could not connect to Antigravity Language Server";
+        statusBarItem.show();
+    }
+}
+
+export function deactivate() { }

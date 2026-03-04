@@ -1,0 +1,1 @@
+/Users/mdzie/GitHub/Mission_Initiation_and_Kommand_Evolution/.agent/workflows/stitch_to_react.md

@@ -1,0 +1,8 @@
+{
+    "mode": "RAPID_PROTOTYPE",
+    "testing_suite": "OFF",
+    "checkin_command": "git add . && git commit -m 'wip' && git push",
+    "update_docs_command": "./utils/generate_docs.sh",
+    "deploy_command": "npm run compile && npx @vscode/vsce package",
+    "start_server_command": "npm run watch"
+}

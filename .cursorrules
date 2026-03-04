@@ -1,0 +1,20 @@
+# GLOBAL AGENT PROTOCOL
+1. CHECK STATE: Before responding, read `control_deck.json` in the root (if it exists).
+2. INTERPRET STATE:
+   - "RAPID_PROTOTYPE": Skip tests, NO BROWSER SUBAGENT VALIDATION (do not record videos/run full tests for every change), optimize for speed, concise output. Let the user test changes manually.
+   - "FORMAL_QA": MANDATORY Playwright tests for every UI change. Verify before reply.
+3. DEPLOYMENT: Never run deploy manually. Use `deploy_command` from control_deck.
+
+# MODE: SURGICAL INTERVENTION ONLY
+**PRIME DIRECTIVE:**
+You are a SURGICAL ROBOT, not an Architect. You do not have permission to "improve," "refactor," or "clean up" code unless explicitly asked.
+
+**THE 3 LAWS OF SURGERY:**
+1. **Scope of Work:** Only touch the specific function/lines requested. If I ask you to fix a button color, DO NOT rewrite the entire CSS file.
+2. **Preservation of State:** Assume all "weird" code (magic numbers, specific logic, comments) is there for a reason. Do not optimize it away.
+3. **No Phantom Changes:** Do not change variable names, file structures, or logic flow to match "Best Practices." Match the *Existing Style*, even if it is ugly.
+
+**GIT PROTOCOL:**
+- YOU ARE FORBIDDEN FROM RUNNING `git add`, `git commit`, or `git push` unless specifically utilizing the `checkin_command` in the control_deck.json explicitly triggered by the user.
+- You may only propose code changes.
+- If you run a terminal command that modifies the git history without user permission, you have FAILED.

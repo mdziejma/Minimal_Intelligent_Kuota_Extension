@@ -1,0 +1,40 @@
+{
+    "name": "minimal-intelligent-kuota-extension",
+    "displayName": "Minimal Intelligent Kuota Extension",
+    "description": "M.I.K.E. — Zero-telemetry AI quota tracker for your status bar",
+    "version": "0.1.0",
+    "publisher": "mdzie",
+    "engines": {
+        "vscode": "^1.75.0"
+    },
+    "categories": [
+        "Other"
+    ],
+    "activationEvents": [
+        "onStartupFinished"
+    ],
+    "main": "./dist/extension.js",
+    "contributes": {
+        "commands": [
+            {
+                "command": "mikeQuota.refresh",
+                "title": "Refresh Quota"
+            }
+        ]
+    },
+    "scripts": {
+        "vscode:prepublish": "npm run compile",
+        "compile": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node",
+        "watch": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --watch",
+        "pretest": "npm run compile && npm run lint",
+        "lint": "eslint src --ext ts",
+        "package": "vsce package",
+        "compile-build": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node"
+    },
+    "devDependencies": {
+        "@types/vscode": "^1.75.0",
+        "@types/node": "16.x",
+        "typescript": "^4.9.5",
+        "esbuild": "^0.17.11"
+    }
+}

@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+
+# Build/Output
+dist/
+build/
+out/
+.next/
+
+# Environment/Secrets
+.env
+.env.local
+.env.*.local
+*.pem
+
+# IDEs and Tools
+.DS_Store
+.vscode/
+.idea/
+.cursor/
+*.log
+
+# Build Artifacts
+*.vsix
+
+# Generated Docs
+docs/images/
+
+# Agent Artifacts
+/tmp/
