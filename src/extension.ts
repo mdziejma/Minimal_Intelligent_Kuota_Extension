@@ -229,31 +229,71 @@ function checkAlerts(key: string, data: any) {
 
 function findLanguageServerInfo(): Promise<{ port: number; csrfToken: string }> {
     return new Promise((resolve, reject) => {
-        const psCommand = "ps aux | grep -v grep | grep -E 'language_server_macos|language_server_macos_arm'";
-        exec(psCommand, (psError, psStdout) => {
-            if (psError || !psStdout) return reject(new Error("Language Server not running."));
+        const isWindows = process.platform === 'win32';
 
-            const lines = psStdout.trim().split('\n');
-            const targetLine = lines[0];
+        if (isWindows) {
+            // Windows logic: Using powershell to find the process and its command line
+            // We look for any process named language_server_windows...
+            const psCommand = `powershell -Command "Get-WmiObject Win32_Process -Filter \\"Name LIKE 'language_server_windows%'\\" | Select-Object CommandLine, ProcessId | ConvertTo-Json"`;
+            exec(psCommand, (psError, psStdout) => {
+                if (psError || !psStdout) return reject(new Error("Language Server not running."));
 
-            const csrfMatch = targetLine.match(/--csrf_token\s+([a-f0-9-]+)/);
-            const pidMatch = targetLine.match(/^\S+\s+(\d+)/);
+                try {
+                    let processes = JSON.parse(psStdout);
+                    if (!Array.isArray(processes)) processes = [processes];
 
-            if (!csrfMatch || !pidMatch) return reject(new Error("Missing token or PID."));
+                    const target = processes.find((p: any) => p.CommandLine && p.CommandLine.includes('--csrf_token'));
+                    if (!target) return reject(new Error("Missing token or PID."));
 
-            const csrfToken = csrfMatch[1];
-            const pid = pidMatch[1];
+                    const csrfMatch = target.CommandLine.match(/--csrf_token\s+([a-f0-9-]+)/);
+                    if (!csrfMatch) return reject(new Error("Missing token."));
 
-            const lsofCommand = `lsof -i -P -n -a -p ${pid} | grep LISTEN`;
-            exec(lsofCommand, (lsofError, lsofStdout) => {
-                if (lsofError || !lsofStdout) return reject(new Error("No network ports found for LS."));
+                    const csrfToken = csrfMatch[1];
+                    const pid = target.ProcessId;
 
-                const portMatches = Array.from(lsofStdout.matchAll(/127\.0\.0\.1:(\d+)/g)).map(m => parseInt(m[1]));
-                if (portMatches.length === 0) return reject(new Error("No loopback ports."));
+                    // Find the listening port for this PID
+                    const netstatCommand = `netstat -ano | findstr LISTENING | findstr ${pid}`;
+                    exec(netstatCommand, (nsError, nsStdout) => {
+                        if (nsError || !nsStdout) return reject(new Error("No network ports found for LS."));
 
-                resolve({ port: portMatches[0], csrfToken });
+                        // Extract port from: TCP 127.0.0.1:12345 0.0.0.0:0 LISTENING PID
+                        const portMatches = Array.from(nsStdout.matchAll(/127\.0\.0\.1:(\d+)/g)).map(m => parseInt(m[1]));
+                        if (portMatches.length === 0) return reject(new Error("No loopback ports found for LS PID."));
+
+                        resolve({ port: portMatches[0], csrfToken });
+                    });
+                } catch (e) {
+                    reject(new Error("Failed to parse process information on Windows."));
+                }
             });
-        });
+        } else {
+            // macOS / Linux logic
+            const psCommand = "ps aux | grep -v grep | grep -E 'language_server_macos|language_server_macos_arm|language_server_linux'";
+            exec(psCommand, (psError, psStdout) => {
+                if (psError || !psStdout) return reject(new Error("Language Server not running."));
+
+                const lines = psStdout.trim().split('\n');
+                const targetLine = lines[0];
+
+                const csrfMatch = targetLine.match(/--csrf_token\s+([a-f0-9-]+)/);
+                const pidMatch = targetLine.match(/^\S+\s+(\d+)/);
+
+                if (!csrfMatch || !pidMatch) return reject(new Error("Missing token or PID in process list."));
+
+                const csrfToken = csrfMatch[1];
+                const pid = pidMatch[1];
+
+                const lsofCommand = `lsof -i -P -n -a -p ${pid} | grep LISTEN`;
+                exec(lsofCommand, (lsofError, lsofStdout) => {
+                    if (lsofError || !lsofStdout) return reject(new Error("No network ports found for LS."));
+
+                    const portMatches = Array.from(lsofStdout.matchAll(/127\.0\.0\.1:(\d+)/g)).map(m => parseInt(m[1]));
+                    if (portMatches.length === 0) return reject(new Error("No loopback ports found for LS PID."));
+
+                    resolve({ port: portMatches[0], csrfToken });
+                });
+            });
+        }
     });
 }
 

@@ -56,8 +56,8 @@ M.I.K.E. works out of the box with zero configuration. It auto-detects the Langu
 
 ## 🛠️ How It Works
 
-1. **Process Discovery:** On activation, M.I.K.E. runs `ps aux` to locate the running `language_server_macos` process and extracts its PID and `--csrf_token` from the command line arguments.
-2. **Port Detection:** It then uses `lsof` to find the `127.0.0.1` loopback port the Language Server is listening on.
+1. **Process Discovery:** On activation, M.I.K.E. uses platform-specific commands (`ps aux` on macOS/Linux, `Get-WmiObject` on Windows) to locate the running Language Server process and extracts its PID and `--csrf_token` from the command line arguments.
+2. **Port Detection:** It then uses `lsof` (macOS/Linux) or `netstat` (Windows) to find the `127.0.0.1` loopback port the Language Server is listening on.
 3. **Data Fetch:** A `POST` request is sent to two local HTTPS endpoints:
    - `GetCascadeModelConfigData` — primary source of model quota info.
    - `GetUserStatus` — fallback source for additional models.
