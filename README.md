@@ -26,20 +26,24 @@ M.I.K.E. was built to do one thing securely: intercept the IDE's local language 
 - **Critical Alerts:** Background turns red and a warning notification fires when any quota drops to ≤ 15%.
 - **Health Checks:** Indicates if the Language Server is offline or a model is not configured.
 
-## 🚀 Installation
+### Option A: Antigravity Marketplace (Easiest)
+1. Open Antigravity.
+2. Go to the Extensions view (`Ctrl+Shift+X` / `Cmd+Shift+X`).
+3. Search for **"Minimal Intelligent Kuota Extension"** or **"MIKE"**.
+4. Click **Install**.
 
-### Option A: Manual VSIX Installation
+### Option B: Manual VSIX Installation
 1. Download the latest `.vsix` from the [Releases](https://github.com/mdziejma/Minimal_Intelligent_Kuota_Extension/releases) page.
 2. Open Antigravity (or VS Code).
-3. Go to the Extensions view (`Ctrl+Shift+X` / `Cmd+Shift+X`).
+3. Go to the Extensions view.
 4. Click the `...` at the top right of the panel and select **Install from VSIX…**
 5. Select the downloaded file.
 
-### Option B: Build from Source
+### Option C: Build from Source
 1. Clone this repository.
 2. Run `npm install` to install dependencies.
 3. Run `npm run compile` to build.
-4. Run `npx @vscode/vsce package` to create the `.vsix` file.
+4. Run `npm run package` to create the `.vsix` file.
 5. Install the `.vsix` via Extensions → `...` → **Install from VSIX…**
 
 ## ⚙️ Configuration
@@ -59,6 +63,16 @@ M.I.K.E. works out of the box with zero configuration. It auto-detects the Langu
    - `GetUserStatus` — fallback source for additional models.
 4. **Categorization:** The returned model configs are matched by label (e.g., `Gemini 3.1 Pro`, `Gemini 3 Flash`, `Claude`/`GPT`) and their `quotaInfo.remainingFraction` is extracted.
 5. **Display:** Three separate status bar items are updated every second with live countdown timers, and fresh data is fetched from the server every 60 seconds.
+
+## 🚢 Deployment (to Antigravity Marketplace)
+
+This extension is published to the **Open VSX Registry**, which powers the marketplace in Antigravity.
+
+1.  **Get a Token:** Create an account at [open-vsx.org](https://open-vsx.org/) and generate a Personal Access Token.
+2.  **Publish:** Run the following command (replacing `YOUR_TOKEN`):
+    ```bash
+    npm run deploy -- --pat YOUR_TOKEN
+    ```
 
 ## 🤝 Contributing
 

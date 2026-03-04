@@ -1,12 +1,6 @@
 {
     "actions": [
         {
-            "text": "$(sparkle) INITIALIZE",
-            "command": "echo 'Please open the Antigravity Chat and type: /initialize_project'",
-            "color": "#FFEB3B",
-            "tooltip": "Scaffold this project (Agent Workflow)"
-        },
-        {
             "text": "$(zap) FAST",
             "command": "python3 /Users/mdzie/GitHub/Mission_Initiation_and_Kommand_Evolution/scripts/update_control_deck.py --set mode RAPID_PROTOTYPE --set testing_suite OFF",
             "color": "#00C853",

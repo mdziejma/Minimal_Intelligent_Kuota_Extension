@@ -179,7 +179,7 @@ function updateSingleItem(item: vscode.StatusBarItem, data: any, icon: string, l
     const percentage = Math.round(data.quotaInfo.remainingFraction * 100);
     const timeRemaining = formatTimeRemaining(data.quotaInfo.resetTime);
 
-    // Icon + Percentage + Countdown
+    // Icon + Percentage + Short Countdown (H:MM)
     item.text = `${icon} ${percentage}% ${timeRemaining}`;
     item.tooltip = `${label} Quota (${data.label})\nResets in: ${timeRemaining}\nAt: ${new Date(data.quotaInfo.resetTime).toLocaleTimeString()}\nClick for details.`;
 
@@ -205,15 +205,14 @@ function formatTimeRemaining(resetTime: string): string {
     const reset = new Date(resetTime).getTime();
     const diff = reset - now;
 
-    if (diff <= 0) return "0:00:00";
+    if (diff <= 0) return "0:00";
 
     const totalSeconds = Math.floor(diff / 1000);
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
 
-    // Format as H:MM:SS
-    return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    // Format as H:MM
+    return `${hours}:${minutes.toString().padStart(2, '0')}`;
 }
 
 function checkAlerts(key: string, data: any) {
