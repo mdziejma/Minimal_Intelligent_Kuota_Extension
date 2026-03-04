@@ -1,9 +1,14 @@
 # M.I.K.E.
 **Minimal Intelligent Kuota Extension**
 
-![Version](https://img.shields.io/badge/version-0.1.3-blue.svg)
+<p align="center">
+  <img src="MIKE-Quota.png" width="200" alt="M.I.K.E. Logo">
+</p>
+
+![Version](https://img.shields.io/badge/version-0.1.4-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Telemetry](https://img.shields.io/badge/telemetry-ZERO-success.svg)
+![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey.svg)
 
 M.I.K.E. is an ultra-lightweight, zero-telemetry extension for Antigravity (and compatible VS Code forks) that tracks your local AI agent quota in real time.
 
@@ -48,7 +53,7 @@ M.I.K.E. was built to do one thing securely: intercept the IDE's local language 
 
 ## ⚙️ Configuration
 
-M.I.K.E. works out of the box with zero configuration. It auto-detects the Language Server process, its listening port, and CSRF token at runtime.
+M.I.K.E. works out of the box with zero configuration across **macOS** and **Windows**. It auto-detects the Language Server process, its listening port, and CSRF token at runtime.
 
 | Setting | Description | Default |
 | :--- | :--- | :--- |
