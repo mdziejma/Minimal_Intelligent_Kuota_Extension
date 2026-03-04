@@ -1,18 +1,19 @@
 import * as vscode from 'vscode';
 import * as https from 'https';
 import { exec } from 'child_process';
+import { parseWindowsProcessList, parseWindowsPort, parseUnixProcessList, parseUnixPort } from './parser';
 
 let proStatusBarItem: vscode.StatusBarItem;
 let flashStatusBarItem: vscode.StatusBarItem;
 let extStatusBarItem: vscode.StatusBarItem;
 
-let activeQuotas: {
+const activeQuotas: {
     pro?: any;
     flash?: any;
     ext?: any;
 } = {};
 
-let lastKnownPercentages: { [key: string]: number | null } = { pro: null, flash: null, ext: null };
+const lastKnownPercentages: { [key: string]: number | null } = { pro: null, flash: null, ext: null };
 let countdownInterval: NodeJS.Timeout | undefined;
 let lastSeenModels: string[] = [];
 
@@ -121,7 +122,7 @@ async function updateQuotaData(manual: boolean = false) {
         try {
             const userData = await fetchEndpoint(port, csrfToken, '/exa.language_server_pb.LanguageServerService/GetUserStatus');
             userModels = userData.user?.cascadeModelConfigs?.clientModelConfigs || [];
-        } catch (_) { /* ignore */ }
+        } catch { /* ignore */ }
 
         // Merge: cascade models are the primary source, user models fill gaps
         const allModels = [...cascadeModels];
@@ -227,33 +228,62 @@ function checkAlerts(key: string, data: any) {
     lastKnownPercentages[key] = percentage;
 }
 
+
+
 function findLanguageServerInfo(): Promise<{ port: number; csrfToken: string }> {
     return new Promise((resolve, reject) => {
-        const psCommand = "ps aux | grep -v grep | grep -E 'language_server_macos|language_server_macos_arm'";
-        exec(psCommand, (psError, psStdout) => {
-            if (psError || !psStdout) return reject(new Error("Language Server not running."));
+        const isWindows = process.platform === 'win32';
 
-            const lines = psStdout.trim().split('\n');
-            const targetLine = lines[0];
+        if (isWindows) {
+            // Windows logic: Using powershell to find the process and its command line
+            const psCommand = `powershell -Command "Get-WmiObject Win32_Process -Filter \\"Name LIKE 'language_server_windows%'\\" | Select-Object CommandLine, ProcessId | ConvertTo-Json"`;
+            exec(psCommand, (psError, psStdout) => {
+                if (psError || !psStdout) return reject(new Error("Language Server not running (or PowerShell failed)."));
 
-            const csrfMatch = targetLine.match(/--csrf_token\s+([a-f0-9-]+)/);
-            const pidMatch = targetLine.match(/^\S+\s+(\d+)/);
+                try {
+                    const { pid, csrfToken } = parseWindowsProcessList(psStdout);
 
-            if (!csrfMatch || !pidMatch) return reject(new Error("Missing token or PID."));
+                    // Find the listening port for this PID
+                    const netstatCommand = `netstat -ano | findstr LISTENING | findstr ${pid}`;
+                    exec(netstatCommand, (nsError, nsStdout) => {
+                        if (nsError || !nsStdout) return reject(new Error("No network ports found for LS PID."));
 
-            const csrfToken = csrfMatch[1];
-            const pid = pidMatch[1];
-
-            const lsofCommand = `lsof -i -P -n -a -p ${pid} | grep LISTEN`;
-            exec(lsofCommand, (lsofError, lsofStdout) => {
-                if (lsofError || !lsofStdout) return reject(new Error("No network ports found for LS."));
-
-                const portMatches = Array.from(lsofStdout.matchAll(/127\.0\.0\.1:(\d+)/g)).map(m => parseInt(m[1]));
-                if (portMatches.length === 0) return reject(new Error("No loopback ports."));
-
-                resolve({ port: portMatches[0], csrfToken });
+                        try {
+                            const port = parseWindowsPort(nsStdout);
+                            resolve({ port, csrfToken });
+                        } catch (e: any) {
+                            reject(e);
+                        }
+                    });
+                } catch (e: any) {
+                    reject(e);
+                }
             });
-        });
+        } else {
+            // macOS / Linux logic
+            const psCommand = "ps aux | grep -v grep | grep -E 'language_server_macos|language_server_macos_arm|language_server_linux'";
+            exec(psCommand, (psError, psStdout) => {
+                if (psError || !psStdout) return reject(new Error("Language Server not running."));
+
+                try {
+                    const { pid, csrfToken } = parseUnixProcessList(psStdout);
+
+                    const lsofCommand = `lsof -i -P -n -a -p ${pid} | grep LISTEN`;
+                    exec(lsofCommand, (lsofError, lsofStdout) => {
+                        if (lsofError || !lsofStdout) return reject(new Error("No network ports found for LS."));
+
+                        try {
+                            const port = parseUnixPort(lsofStdout);
+                            resolve({ port, csrfToken });
+                        } catch (e: any) {
+                            reject(e);
+                        }
+                    });
+                } catch (e: any) {
+                    reject(e);
+                }
+            });
+        }
     });
 }
 
