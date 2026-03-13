@@ -5,7 +5,7 @@
   <img src="MIKE-Quota.png" width="200" alt="M.I.K.E. Logo">
 </p>
 
-![Version](https://img.shields.io/badge/version-0.1.4-blue.svg)
+![Version](https://img.shields.io/badge/version-0.1.5-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Telemetry](https://img.shields.io/badge/telemetry-ZERO-success.svg)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey.svg)

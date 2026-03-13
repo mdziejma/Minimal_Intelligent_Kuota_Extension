@@ -424,26 +424,44 @@ function seedMockData(context: vscode.ExtensionContext) {
     const now = Date.now();
     const oneHour = 60 * 60 * 1000;
 
-    // Generate 24 hours of data points
-    for (let i = 24; i >= 0; i--) {
+    // Generate 14 days of data points (every 2 hours to keep it readable but dense)
+    for (let i = 14 * 24; i >= 0; i -= 2) {
         const ts = now - (i * oneHour);
-        // Simulate a "usage drop" followed by "reset/recovery" pattern
-        // i=24 is oldest, i=0 is now
-        const stage = i % 12; 
-        const pro = Math.max(20, 100 - (stage * 8));
-        const flash = Math.max(10, 100 - (stage * 6));
-        const ext = Math.max(50, 100 - (stage * 4));
+        
+        // Create distinct usage patterns for different models
+        // Pro is heavy on weekdays, Flash is steady, Ext is occasional bursts
+        const dayOfWeek = new Date(ts).getDay();
+        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+        
+        const hour = i % 24;
+        const stage = hour % 12;
+        
+        let pro = 100;
+        let flash = 100;
+        let ext = 100;
+
+        if (!isWeekend) {
+            pro = Math.max(10, 100 - (stage * 9));
+            flash = Math.max(30, 100 - (stage * 5));
+        } else {
+            pro = Math.max(70, 100 - (stage * 2));
+            flash = Math.max(60, 100 - (stage * 3));
+        }
+
+        // Add some "burps" of high usage
+        if (i % 48 === 0) pro = 5; 
 
         mockData.push({
             timestamp: ts,
-            pro: pro,
-            flash: flash,
-            ext: ext
+            pro,
+            flash,
+            ext
         });
     }
 
     context.globalState.update('quotaHistory', mockData);
 }
+
 
 
 /**
@@ -487,6 +505,8 @@ function getWebviewContent(history: QuotaDataPoint[]) {
             --accent-pro: #00ff88;
             --accent-flash: #ffff00;
             --accent-ext: #00d2ff;
+            --btn-bg: rgba(255, 255, 255, 0.05);
+            --btn-active: rgba(255, 255, 255, 0.15);
         }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -502,12 +522,12 @@ function getWebviewContent(history: QuotaDataPoint[]) {
             width: 100%;
             max-width: 1000px;
             background: var(--card-bg);
-            backdrop-filter: blur(10px);
+            backdrop-filter: blur(15px);
             border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
+            border-radius: 16px;
             padding: 24px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-            min-height: 450px;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+            min-height: 500px;
         }
         header {
             margin-bottom: 24px;
@@ -516,134 +536,144 @@ function getWebviewContent(history: QuotaDataPoint[]) {
             max-width: 1000px;
             display: flex;
             justify-content: space-between;
-            align-items: center;
+            align-items: flex-end;
         }
-        h1 {
-            font-size: 24px;
+        .title-group h1 {
+            font-size: 28px;
             margin: 0;
-            background: linear-gradient(90deg, #fff, #888);
+            background: linear-gradient(90deg, #fff, #aaa);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
-        .stats {
+        .filters {
             display: flex;
-            gap: 16px;
+            gap: 8px;
+            background: var(--btn-bg);
+            padding: 4px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .filter-btn {
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+            color: #888;
+            background: transparent;
+        }
+        .filter-btn:hover { color: #fff; background: var(--btn-active); }
+        .filter-btn.active { color: #fff; background: var(--btn-active); box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+
+        .stats-legend {
+            display: flex;
+            gap: 20px;
+            margin-top: 8px;
         }
         .stat-item {
-            font-size: 14px;
+            font-size: 13px;
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 8px;
+            color: #aaa;
         }
         .dot {
-            width: 10px;
-            height: 10px;
+            width: 8px;
+            height: 8px;
             border-radius: 50%;
         }
-        .dot-pro { background-color: var(--accent-pro); box-shadow: 0 0 8px var(--accent-pro); }
-        .dot-flash { background-color: var(--accent-flash); box-shadow: 0 0 8px var(--accent-flash); }
-        .dot-ext { background-color: var(--accent-ext); box-shadow: 0 0 8px var(--accent-ext); }
+        .dot-pro { background-color: var(--accent-pro); box-shadow: 0 0 10px var(--accent-pro); }
+        .dot-flash { background-color: var(--accent-flash); box-shadow: 0 0 10px var(--accent-flash); }
+        .dot-ext { background-color: var(--accent-ext); box-shadow: 0 0 10px var(--accent-ext); }
         
         canvas {
             width: 100% !important;
             height: 450px !important;
         }
         .no-data {
-            padding: 100px;
+            padding: 150px;
             text-align: center;
             font-style: italic;
-            color: #888;
-        }
-        #error-display {
-            color: #ff4444;
-            background: rgba(255, 0, 0, 0.1);
-            padding: 10px;
-            margin-bottom: 20px;
-            border-radius: 4px;
-            display: none;
-            font-family: monospace;
-            font-size: 12px;
-            width: 100%;
-            max-width: 1000px;
+            color: #666;
+            font-size: 16px;
         }
     </style>
 </head>
 <body>
     <header>
-        <h1>Quota Usage History</h1>
-        <div class="stats">
-            <div class="stat-item"><span class="dot dot-pro"></span> Gemini Pro</div>
-            <div class="stat-item"><span class="dot dot-flash"></span> Gemini Flash</div>
-            <div class="stat-item"><span class="dot dot-ext"></span> External</div>
+        <div class="title-group">
+            <h1>Quota History</h1>
+            <div class="stats-legend">
+                <div class="stat-item"><span class="dot dot-pro"></span> Gemini Pro</div>
+                <div class="stat-item"><span class="dot dot-flash"></span> Gemini Flash</div>
+                <div class="stat-item"><span class="dot dot-ext"></span> External</div>
+            </div>
+        </div>
+        <div class="filters" id="rangeFilters">
+            <button class="filter-btn" data-days="1">Today</button>
+            <button class="filter-btn" data-days="3">3 Days</button>
+            <button class="filter-btn active" data-days="7">Week</button>
+            <button class="filter-btn" data-days="14">14 Days</button>
         </div>
     </header>
 
-    <div id="error-display"></div>
-
     <div class="container">
-        ${history.length > 0 ? '<canvas id="quotaChart"></canvas>' : '<div class="no-data">No history data logged yet.<br><br>Try hitting "Refresh Now" in the quota details to create a data point.</div>'}
+        ${history.length > 0 ? '<canvas id="quotaChart"></canvas>' : '<div class="no-data">No history data logged yet.<br><br>Keep coding and M.I.K.E. will track your progress.</div>'}
     </div>
 
     <script>
-        function logError(err) {
-            const display = document.getElementById('error-display');
-            display.style.display = 'block';
-            display.innerText += 'Error: ' + err + '\\n';
-        }
+        const rawHistory = ${historyJson};
+        let chart = null;
 
-        window.onerror = function(msg, url, line) {
-            logError(msg + " at line " + line);
-        };
+        function updateChart(days) {
+            const cutoff = Date.now() - (days * 24 * 60 * 60 * 1000);
+            const filtered = rawHistory.filter(p => p.timestamp >= cutoff);
+            
+            if (filtered.length === 0) return;
 
-        try {
-            if (typeof Chart === 'undefined') {
-                logError("Chart.js failed to load from CDN. Check internet or Webview CSP.");
-            } else if (${history.length > 0}) {
-                const historyData = ${historyJson};
-                const ctx = document.getElementById('quotaChart').getContext('2d');
-                
-                const datasets = [
-                    {
-                        label: 'Pro',
-                        data: historyData.map(p => p.pro),
-                        borderColor: '#00ff88',
-                        backgroundColor: 'rgba(0, 255, 136, 0.1)',
-                        borderWidth: 3,
-                        pointRadius: historyData.length > 50 ? 0 : 3,
-                        tension: 0.3,
-                        fill: true
-                    },
-                    {
-                        label: 'Flash',
-                        data: historyData.map(p => p.flash),
-                        borderColor: '#ffff00',
-                        backgroundColor: 'rgba(255, 255, 0, 0.1)',
-                        borderWidth: 3,
-                        pointRadius: historyData.length > 50 ? 0 : 3,
-                        tension: 0.3,
-                        fill: true
-                    },
-                    {
-                        label: 'External',
-                        data: historyData.map(p => p.ext),
-                        borderColor: '#00d2ff',
-                        backgroundColor: 'rgba(0, 210, 255, 0.1)',
-                        borderWidth: 3,
-                        pointRadius: historyData.length > 50 ? 0 : 3,
-                        tension: 0.3,
-                        fill: true
-                    }
-                ];
+            const ctx = document.getElementById('quotaChart').getContext('2d');
+            
+            const datasets = [
+                {
+                    label: 'Pro',
+                    data: filtered.map(p => ({ x: p.timestamp, y: p.pro })),
+                    borderColor: '#00ff88',
+                    backgroundColor: 'rgba(0, 255, 136, 0.05)',
+                    borderWidth: 2.5,
+                    pointRadius: filtered.length > 100 ? 0 : 2,
+                    tension: 0.3,
+                    fill: true
+                },
+                {
+                    label: 'Flash',
+                    data: filtered.map(p => ({ x: p.timestamp, y: p.flash })),
+                    borderColor: '#ffff00',
+                    backgroundColor: 'rgba(255, 255, 0, 0.05)',
+                    borderWidth: 2.5,
+                    pointRadius: filtered.length > 100 ? 0 : 2,
+                    tension: 0.3,
+                    fill: true
+                },
+                {
+                    label: 'External',
+                    data: filtered.map(p => ({ x: p.timestamp, y: p.ext })),
+                    borderColor: '#00d2ff',
+                    backgroundColor: 'rgba(0, 210, 255, 0.05)',
+                    borderWidth: 2.5,
+                    pointRadius: filtered.length > 100 ? 0 : 2,
+                    tension: 0.3,
+                    fill: true
+                }
+            ];
 
-                new Chart(ctx, {
+            if (chart) {
+                chart.data.datasets = datasets;
+                chart.update();
+            } else {
+                chart = new Chart(ctx, {
                     type: 'line',
-                    data: {
-                        labels: historyData.map(p => {
-                            const d = new Date(p.timestamp);
-                            return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                        }),
-                        datasets: datasets
-                    },
+                    data: { datasets },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
@@ -651,10 +681,15 @@ function getWebviewContent(history: QuotaDataPoint[]) {
                         plugins: { legend: { display: false } },
                         scales: {
                             x: {
-                                grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                                type: 'linear',
+                                grid: { color: 'rgba(255, 255, 255, 0.03)' },
                                 ticks: { 
-                                    color: '#888',
-                                    maxRotation: 0,
+                                    color: '#666',
+                                    callback: function(value) {
+                                        const date = new Date(value);
+                                        if (days <= 1) return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                                        return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+                                    },
                                     autoSkip: true,
                                     maxTicksLimit: 8
                                 }
@@ -662,23 +697,31 @@ function getWebviewContent(history: QuotaDataPoint[]) {
                             y: {
                                 beginAtZero: true,
                                 max: 100,
-                                grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                                ticks: { 
-                                    color: '#888',
-                                    callback: (v) => v + '%'
-                                }
+                                grid: { color: 'rgba(255, 255, 255, 0.03)' },
+                                ticks: { color: '#666', callback: (v) => v + '%' }
                             }
                         }
                     }
                 });
             }
-        } catch (e) {
-            logError(e.message);
+        }
+
+        if (rawHistory.length > 0) {
+            updateChart(7);
+            
+            document.getElementById('rangeFilters').addEventListener('click', (e) => {
+                if (e.target.classList.contains('filter-btn')) {
+                    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                    e.target.classList.add('active');
+                    updateChart(parseInt(e.target.dataset.days));
+                }
+            });
         }
     </script>
 </body>
 </html>`;
 }
+
 
 
 
