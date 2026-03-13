@@ -27,7 +27,9 @@ M.I.K.E. was built to do one thing securely: intercept the IDE's local language 
 - **Stealth Polling:** Piggybacks on the native Language Server endpoints on `127.0.0.1` — no external API keys or credentials required.
 - **Port & Token Auto-Discovery:** Automatically detects the Language Server process, its port, and CSRF token. No manual configuration needed.
 - **Live Countdown Timers:** Each status bar item shows a real-time `H:MM:SS` countdown until quota reset.
+- **Usage History Plot:** Beautiful, glassmorphic line charts show your quota usage over time for each model category.
 - **Smooth Color Gradient:** Status bar colors shift continuously from green (100%) → yellow (50%) → red (0%) using HSL mapping.
+
 - **Critical Alerts:** Background turns red and a warning notification fires when any quota drops to ≤ 15%.
 - **Health Checks:** Indicates if the Language Server is offline or a model is not configured.
 
@@ -58,6 +60,8 @@ M.I.K.E. works out of the box with zero configuration across **macOS** and **Win
 | Setting | Description | Default |
 | :--- | :--- | :--- |
 | `mikeQuota.refresh` | Command to manually refresh quota data. | — |
+| `mikeQuota.showPlot` | Opens the usage history plot visualization. | — |
+
 
 ## 🛠️ How It Works
 

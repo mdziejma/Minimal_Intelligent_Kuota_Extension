@@ -24,6 +24,18 @@
             {
                 "command": "mikeQuota.refresh",
                 "title": "Refresh Quota"
+            },
+            {
+                "command": "mikeQuota.showPlot",
+                "title": "Plot Quota Usage"
+            },
+            {
+                "command": "mikeQuota.debugHistory",
+                "title": "Debug Quota History"
+            },
+            {
+                "command": "mikeQuota.clearHistory",
+                "title": "Clear Quota History"
             }
         ]
     },
