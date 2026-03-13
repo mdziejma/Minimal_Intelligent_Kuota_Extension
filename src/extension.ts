@@ -12,6 +12,14 @@ const activeQuotas: {
     flash?: any;
     ext?: any;
 } = {};
+ 
+interface QuotaDataPoint {
+    timestamp: number;
+    pro: number | null;
+    flash: number | null;
+    ext: number | null;
+}
+
 
 const lastKnownPercentages: { [key: string]: number | null } = { pro: null, flash: null, ext: null };
 let countdownInterval: NodeJS.Timeout | undefined;
@@ -39,10 +47,40 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Register refresh command
     context.subscriptions.push(vscode.commands.registerCommand('mikeQuota.refresh', async () => {
-        await updateQuotaData(true);
+        await updateQuotaData(context, true);
+    }));
+
+
+    // Register plot command
+    context.subscriptions.push(vscode.commands.registerCommand('mikeQuota.showPlot', async () => {
+        showQuotaPlotWebview(context);
+    }));
+
+
+
+    // Register debug history command
+    context.subscriptions.push(vscode.commands.registerCommand('mikeQuota.debugHistory', () => {
+        const history = context.globalState.get<QuotaDataPoint[]>('quotaHistory', []);
+        const count = history.length;
+        if (count === 0) {
+            vscode.window.showWarningMessage("Quota history is empty.");
+        } else {
+            const first = new Date(history[0].timestamp).toLocaleTimeString();
+            const last = new Date(history[count - 1].timestamp).toLocaleTimeString();
+            vscode.window.showInformationMessage(`History: ${count} points. Range: ${first} to ${last}.`);
+        }
+    }));
+
+    // Register clear history command
+    context.subscriptions.push(vscode.commands.registerCommand('mikeQuota.clearHistory', async () => {
+        await context.globalState.update('quotaHistory', []);
+        seedMockData(context);
+        vscode.window.showInformationMessage("Quota history cleared and re-seeded with mock data.");
+        vscode.commands.executeCommand('mikeQuota.showPlot');
     }));
 
     // Register detailed info command
+
     context.subscriptions.push(vscode.commands.registerCommand('mikeQuota.showDetails', async () => {
         const info = activeQuotas;
         let detailMsg = "M.I.K.E. Quota Status:\n\n";
@@ -78,18 +116,23 @@ export async function activate(context: vscode.ExtensionContext) {
 
         detailMsg += `\n--- Debug Info ---\nModels Processed:\n${lastSeenModels.length > 0 ? lastSeenModels.join('\n') : 'None yet'}\n`;
 
-        vscode.window.showInformationMessage(detailMsg, "Refresh Now").then(selection => {
+        vscode.window.showInformationMessage(detailMsg, "Refresh Now", "Show Usage Plot").then(selection => {
             if (selection === "Refresh Now") {
                 vscode.commands.executeCommand('mikeQuota.refresh');
+            } else if (selection === "Show Usage Plot") {
+                vscode.commands.executeCommand('mikeQuota.showPlot');
             }
         });
     }));
 
-    // Initial refresh
-    await updateQuotaData();
+
+    // Initial refresh and seed mock data if empty
+    seedMockData(context);
+    await updateQuotaData(context);
+
 
     // Setup periodic data fetch (every 1 minute for better accuracy)
-    const dataFetchInterval = setInterval(() => updateQuotaData(), 60000);
+    const dataFetchInterval = setInterval(() => updateQuotaData(context), 60000);
     context.subscriptions.push({ dispose: () => clearInterval(dataFetchInterval) });
 
     // Setup visual countdown update (every 1 second)
@@ -100,7 +143,8 @@ export async function activate(context: vscode.ExtensionContext) {
 /**
  * Fetches the latest quota data from the Language Server
  */
-async function updateQuotaData(manual: boolean = false) {
+async function updateQuotaData(context: vscode.ExtensionContext, manual: boolean = false) {
+
     if (manual) {
         // Show loading state on all items
         [proStatusBarItem, flashStatusBarItem, extStatusBarItem].forEach(item => {
@@ -138,7 +182,11 @@ async function updateQuotaData(manual: boolean = false) {
         activeQuotas.pro = allModels.find((m: any) => m.label.includes('Gemini 3.1 Pro') && m.quotaInfo);
         activeQuotas.flash = allModels.find((m: any) => m.label.includes('Gemini 3 Flash') && m.quotaInfo);
         activeQuotas.ext = allModels.find((m: any) => (m.label.includes('Claude') || m.label.includes('GPT')) && m.quotaInfo);
+ 
+        // Log the data point (force save on manual refresh)
+        logQuotaData(context, activeQuotas, manual);
 
+ 
         updateStatusBarDisplay();
 
         if (manual) {
@@ -157,6 +205,43 @@ async function updateQuotaData(manual: boolean = false) {
         }
     }
 }
+ 
+/**
+ * Logs a new data point to the persistent history
+ */
+function logQuotaData(context: vscode.ExtensionContext, data: any, force: boolean = false) {
+
+    const history: QuotaDataPoint[] = context.globalState.get('quotaHistory', []);
+    
+    const now = Date.now();
+    const lastPoint = history.length > 0 ? history[history.length - 1] : null;
+    
+    // Only log if something changed or if it's been more than 15 minutes since last log
+    const pro = data.pro ? Math.round(data.pro.quotaInfo.remainingFraction * 100) : null;
+    const flash = data.flash ? Math.round(data.flash.quotaInfo.remainingFraction * 100) : null;
+    const ext = data.ext ? Math.round(data.ext.quotaInfo.remainingFraction * 100) : null;
+    
+    const hasChanged = !lastPoint || 
+        lastPoint.pro !== pro || 
+        lastPoint.flash !== flash || 
+        lastPoint.ext !== ext;
+    
+    const isOld = !lastPoint || (now - lastPoint.timestamp) > 15 * 60 * 1000;
+    
+    if (hasChanged || isOld || force) {
+
+        history.push({ timestamp: now, pro, flash, ext });
+        
+        // Keep last 2016 points (about 1-2 weeks of data if logged every 5-15 mins)
+        // Actually since we log on change, 2016 points could last a long time.
+        if (history.length > 5000) {
+            history.shift();
+        }
+        
+        context.globalState.update('quotaHistory', history);
+    }
+}
+
 
 /**
  * Updates the visual display of status bar items without fetching new data
@@ -182,7 +267,8 @@ function updateSingleItem(item: vscode.StatusBarItem, data: any, icon: string, l
 
     // Icon + Percentage + Short Countdown (H:MM)
     item.text = `${icon} ${percentage}% ${timeRemaining}`;
-    item.tooltip = `${label} Quota (${data.label})\nResets in: ${timeRemaining}\nAt: ${new Date(data.quotaInfo.resetTime).toLocaleTimeString()}\nClick for details.`;
+    item.tooltip = `${label} Quota (${data.label})\nResets in: ${timeRemaining}\nAt: ${new Date(data.quotaInfo.resetTime).toLocaleTimeString()}\nClick for details & History Plot.`;
+
 
     // Smooth gradient color: Green (100%) -> Yellow (50%) -> Red (0%)
     // Using HSL: H=120 is green, H=60 is yellow, H=0 is red
@@ -326,3 +412,316 @@ export function deactivate() {
     if (extStatusBarItem) extStatusBarItem.dispose();
     if (countdownInterval) clearInterval(countdownInterval);
 }
+
+/**
+ * Seeds mock data for visualization if history is empty
+ */
+function seedMockData(context: vscode.ExtensionContext) {
+    const history = context.globalState.get<QuotaDataPoint[]>('quotaHistory', []);
+    if (history.length > 0) return;
+
+    const mockData: QuotaDataPoint[] = [];
+    const now = Date.now();
+    const oneHour = 60 * 60 * 1000;
+
+    // Generate 14 days of data points (every 2 hours to keep it readable but dense)
+    for (let i = 14 * 24; i >= 0; i -= 2) {
+        const ts = now - (i * oneHour);
+        
+        // Create distinct usage patterns for different models
+        // Pro is heavy on weekdays, Flash is steady, Ext is occasional bursts
+        const dayOfWeek = new Date(ts).getDay();
+        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+        
+        const hour = i % 24;
+        const stage = hour % 12;
+        
+        let pro = 100;
+        let flash = 100;
+        let ext = 100;
+
+        if (!isWeekend) {
+            pro = Math.max(10, 100 - (stage * 9));
+            flash = Math.max(30, 100 - (stage * 5));
+        } else {
+            pro = Math.max(70, 100 - (stage * 2));
+            flash = Math.max(60, 100 - (stage * 3));
+        }
+
+        // Add some "burps" of high usage
+        if (i % 48 === 0) pro = 5; 
+
+        mockData.push({
+            timestamp: ts,
+            pro,
+            flash,
+            ext
+        });
+    }
+
+    context.globalState.update('quotaHistory', mockData);
+}
+
+
+
+/**
+ * Creates and shows the webview with quota history plot
+ */
+function showQuotaPlotWebview(context: vscode.ExtensionContext) {
+    const panel = vscode.window.createWebviewPanel(
+        'mikeQuotaPlot',
+        'M.I.K.E. Quota Usage History',
+        vscode.ViewColumn.One,
+        {
+            enableScripts: true,
+            retainContextWhenHidden: true
+        }
+    );
+
+    const history = context.globalState.get<QuotaDataPoint[]>('quotaHistory', []);
+    if (history.length === 0) {
+        // One last attempt to seed if it's still empty for some reason
+        seedMockData(context);
+    }
+    vscode.window.setStatusBarMessage(`Opening plot with ${history.length} data points...`, 3000);
+    panel.webview.html = getWebviewContent(history);
+}
+
+function getWebviewContent(history: QuotaDataPoint[]) {
+    const historyJson = JSON.stringify(history);
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M.I.K.E. Quota Usage</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-color: #0d1117;
+            --card-bg: rgba(22, 27, 34, 0.7);
+            --text-color: #c9d1d9;
+            --accent-pro: #00ff88;
+            --accent-flash: #ffff00;
+            --accent-ext: #00d2ff;
+            --btn-bg: rgba(255, 255, 255, 0.05);
+            --btn-active: rgba(255, 255, 255, 0.15);
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            width: 100%;
+            max-width: 1000px;
+            background: var(--card-bg);
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+            min-height: 500px;
+        }
+        header {
+            margin-bottom: 24px;
+            text-align: left;
+            width: 100%;
+            max-width: 1000px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+        .title-group h1 {
+            font-size: 28px;
+            margin: 0;
+            background: linear-gradient(90deg, #fff, #aaa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .filters {
+            display: flex;
+            gap: 8px;
+            background: var(--btn-bg);
+            padding: 4px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .filter-btn {
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+            color: #888;
+            background: transparent;
+        }
+        .filter-btn:hover { color: #fff; background: var(--btn-active); }
+        .filter-btn.active { color: #fff; background: var(--btn-active); box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+
+        .stats-legend {
+            display: flex;
+            gap: 20px;
+            margin-top: 8px;
+        }
+        .stat-item {
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #aaa;
+        }
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+        .dot-pro { background-color: var(--accent-pro); box-shadow: 0 0 10px var(--accent-pro); }
+        .dot-flash { background-color: var(--accent-flash); box-shadow: 0 0 10px var(--accent-flash); }
+        .dot-ext { background-color: var(--accent-ext); box-shadow: 0 0 10px var(--accent-ext); }
+        
+        canvas {
+            width: 100% !important;
+            height: 450px !important;
+        }
+        .no-data {
+            padding: 150px;
+            text-align: center;
+            font-style: italic;
+            color: #666;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="title-group">
+            <h1>Quota History</h1>
+            <div class="stats-legend">
+                <div class="stat-item"><span class="dot dot-pro"></span> Gemini Pro</div>
+                <div class="stat-item"><span class="dot dot-flash"></span> Gemini Flash</div>
+                <div class="stat-item"><span class="dot dot-ext"></span> External</div>
+            </div>
+        </div>
+        <div class="filters" id="rangeFilters">
+            <button class="filter-btn" data-days="1">Today</button>
+            <button class="filter-btn" data-days="3">3 Days</button>
+            <button class="filter-btn active" data-days="7">Week</button>
+            <button class="filter-btn" data-days="14">14 Days</button>
+        </div>
+    </header>
+
+    <div class="container">
+        ${history.length > 0 ? '<canvas id="quotaChart"></canvas>' : '<div class="no-data">No history data logged yet.<br><br>Keep coding and M.I.K.E. will track your progress.</div>'}
+    </div>
+
+    <script>
+        const rawHistory = ${historyJson};
+        let chart = null;
+
+        function updateChart(days) {
+            const cutoff = Date.now() - (days * 24 * 60 * 60 * 1000);
+            const filtered = rawHistory.filter(p => p.timestamp >= cutoff);
+            
+            if (filtered.length === 0) return;
+
+            const ctx = document.getElementById('quotaChart').getContext('2d');
+            
+            const datasets = [
+                {
+                    label: 'Pro',
+                    data: filtered.map(p => ({ x: p.timestamp, y: p.pro })),
+                    borderColor: '#00ff88',
+                    backgroundColor: 'rgba(0, 255, 136, 0.05)',
+                    borderWidth: 2.5,
+                    pointRadius: filtered.length > 100 ? 0 : 2,
+                    tension: 0.3,
+                    fill: true
+                },
+                {
+                    label: 'Flash',
+                    data: filtered.map(p => ({ x: p.timestamp, y: p.flash })),
+                    borderColor: '#ffff00',
+                    backgroundColor: 'rgba(255, 255, 0, 0.05)',
+                    borderWidth: 2.5,
+                    pointRadius: filtered.length > 100 ? 0 : 2,
+                    tension: 0.3,
+                    fill: true
+                },
+                {
+                    label: 'External',
+                    data: filtered.map(p => ({ x: p.timestamp, y: p.ext })),
+                    borderColor: '#00d2ff',
+                    backgroundColor: 'rgba(0, 210, 255, 0.05)',
+                    borderWidth: 2.5,
+                    pointRadius: filtered.length > 100 ? 0 : 2,
+                    tension: 0.3,
+                    fill: true
+                }
+            ];
+
+            if (chart) {
+                chart.data.datasets = datasets;
+                chart.update();
+            } else {
+                chart = new Chart(ctx, {
+                    type: 'line',
+                    data: { datasets },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: { intersect: false, mode: 'index' },
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            x: {
+                                type: 'linear',
+                                grid: { color: 'rgba(255, 255, 255, 0.03)' },
+                                ticks: { 
+                                    color: '#666',
+                                    callback: function(value) {
+                                        const date = new Date(value);
+                                        if (days <= 1) return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                                        return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+                                    },
+                                    autoSkip: true,
+                                    maxTicksLimit: 8
+                                }
+                            },
+                            y: {
+                                beginAtZero: true,
+                                max: 100,
+                                grid: { color: 'rgba(255, 255, 255, 0.03)' },
+                                ticks: { color: '#666', callback: (v) => v + '%' }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        if (rawHistory.length > 0) {
+            updateChart(7);
+            
+            document.getElementById('rangeFilters').addEventListener('click', (e) => {
+                if (e.target.classList.contains('filter-btn')) {
+                    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                    e.target.classList.add('active');
+                    updateChart(parseInt(e.target.dataset.days));
+                }
+            });
+        }
+    </script>
+</body>
+</html>`;
+}
+
+
+
+
