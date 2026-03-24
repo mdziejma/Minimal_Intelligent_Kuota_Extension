@@ -3,7 +3,7 @@
     "displayName": "Minimal Intelligent Kuota Extension",
     "description": "M.I.K.E. — Zero-telemetry AI quota tracker for your status bar",
 
-    "version": "0.1.7",
+    "version": "2.0.0",
 
     "publisher": "mdzie",
     "icon": "MIKE-Quota.png",
