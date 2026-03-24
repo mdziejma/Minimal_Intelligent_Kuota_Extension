@@ -47,7 +47,7 @@
         "watch": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --watch",
         "pretest": "npm run compile && npm run lint",
         "lint": "eslint src --ext ts",
-        "package": "vsce package",
+        "package": "vsce package && mkdir -p binaries && mv *.vsix binaries/",
         "compile-build": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node",
         "deploy": "ovsx publish",
         "test": "mocha -r ts-node/register test/**/*.test.ts"
