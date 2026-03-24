@@ -5,7 +5,7 @@
   <img src="MIKE-Quota.png" width="200" alt="M.I.K.E. Logo">
 </p>
 
-![Version](https://img.shields.io/badge/version-0.1.6-blue.svg)
+![Version](https://img.shields.io/badge/version-0.1.7-blue.svg)
 
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Telemetry](https://img.shields.io/badge/telemetry-ZERO-success.svg)
@@ -27,7 +27,7 @@ M.I.K.E. was built to do one thing securely: intercept the IDE's local language 
 - **Multi-Model Tracking:** Simultaneously monitors **Pro**, **Flash**, and **External** (Claude/GPT) quotas, each with its own status bar item.
 - **Stealth Polling:** Piggybacks on the native Language Server endpoints on `127.0.0.1` — no external API keys or credentials required.
 - **Port & Token Auto-Discovery:** Automatically detects the Language Server process, its port, and CSRF token. No manual configuration needed.
-- **Live Countdown Timers:** Each status bar item shows a real-time `H:MM:SS` countdown until quota reset.
+- **Live Countdown Timers:** Each status bar item shows a real-time `H:MM` countdown until quota reset.
 - **Usage History Plot:** Beautiful, glassmorphic line charts show your quota usage over time for each model category.
 - **Smooth Color Gradient:** Status bar colors shift continuously from green (100%) → yellow (50%) → red (0%) using HSL mapping.
 
@@ -72,7 +72,7 @@ M.I.K.E. works out of the box with zero configuration across **macOS** and **Win
    - `GetCascadeModelConfigData` — primary source of model quota info.
    - `GetUserStatus` — fallback source for additional models.
 4. **Categorization:** The returned model configs are matched by label (e.g., `Gemini 3.1 Pro`, `Gemini 3 Flash`, `Claude`/`GPT`) and their `quotaInfo.remainingFraction` is extracted.
-5. **Display:** Three separate status bar items are updated every second with live countdown timers. For zero-impact tracking, fresh data is fetched from the server every 15 minutes, and strictly only if the VS Code window is currently in focus.
+5. **Display:** Three separate status bar items are updated every minute with live countdown timers. For zero-impact tracking, fresh data is fetched from the server every 15 minutes (with a 5-minute cooldown on window focus changes), and strictly only if the VS Code window is currently in focus.
 
 ## 🚢 Deployment (to Antigravity Marketplace)
 
