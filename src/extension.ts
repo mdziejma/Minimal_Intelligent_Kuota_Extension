@@ -25,7 +25,7 @@ const lastKnownPercentages: { [key: string]: number | null } = { pro: null, flas
 let countdownInterval: NodeJS.Timeout | undefined;
 let lastSeenModels: string[] = [];
 let lastFetchTime = 0;
-const FETCH_COOLDOWN = 5 * 60 * 1000; // 5 minutes
+const FETCH_COOLDOWN = 10 * 60 * 1000; // 10 minutes
 
 export async function activate(context: vscode.ExtensionContext) {
     console.log('Minimal Intelligent Kuota Extension is now active!');
@@ -130,27 +130,22 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Initial refresh and seed mock data if empty
     seedMockData(context);
+    // 1. Activation fetch
     await updateQuotaData(context);
 
-
-
-    // Setup periodic data fetch (every 15 minutes, and only if window is focused)
-    const dataFetchInterval = setInterval(() => {
-        if (vscode.window.state.focused) {
-            updateQuotaData(context);
-        }
-    }, 900000);
-
-    context.subscriptions.push({ dispose: () => clearInterval(dataFetchInterval) });
-
-    // Fetch data when the user returns to the editor
+    // 2. Window Focus Fetch: Refresh when the user returns to the editor (subject to cooldown)
     context.subscriptions.push(vscode.window.onDidChangeWindowState((e) => {
         if (e.focused) {
             updateQuotaData(context);
         }
     }));
 
-    // Setup visual countdown update (every 60 seconds)
+    // 3. Activity-Based Fetch: Refresh when a file is saved (strong signal of active coding)
+    context.subscriptions.push(vscode.workspace.onDidSaveTextDocument(() => {
+        updateQuotaData(context);
+    }));
+
+    // Setup visual countdown update (every 60 seconds) - This is local UI only, no LS ping.
     countdownInterval = setInterval(() => updateStatusBarDisplay(), 60000);
     context.subscriptions.push({ dispose: () => { if (countdownInterval) clearInterval(countdownInterval); } });
 }
