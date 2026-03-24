@@ -24,6 +24,8 @@ interface QuotaDataPoint {
 const lastKnownPercentages: { [key: string]: number | null } = { pro: null, flash: null, ext: null };
 let countdownInterval: NodeJS.Timeout | undefined;
 let lastSeenModels: string[] = [];
+let lastFetchTime = 0;
+const FETCH_COOLDOWN = 5 * 60 * 1000; // 5 minutes
 
 export async function activate(context: vscode.ExtensionContext) {
     console.log('Minimal Intelligent Kuota Extension is now active!');
@@ -135,7 +137,7 @@ export async function activate(context: vscode.ExtensionContext) {
     // Setup periodic data fetch (every 15 minutes, and only if window is focused)
     const dataFetchInterval = setInterval(() => {
         if (vscode.window.state.focused) {
-            updateQuotaData();
+            updateQuotaData(context);
         }
     }, 900000);
 
@@ -144,12 +146,12 @@ export async function activate(context: vscode.ExtensionContext) {
     // Fetch data when the user returns to the editor
     context.subscriptions.push(vscode.window.onDidChangeWindowState((e) => {
         if (e.focused) {
-            updateQuotaData();
+            updateQuotaData(context);
         }
     }));
 
-    // Setup visual countdown update (every 1 second)
-    countdownInterval = setInterval(() => updateStatusBarDisplay(), 1000);
+    // Setup visual countdown update (every 60 seconds)
+    countdownInterval = setInterval(() => updateStatusBarDisplay(), 60000);
     context.subscriptions.push({ dispose: () => { if (countdownInterval) clearInterval(countdownInterval); } });
 }
 
@@ -157,6 +159,12 @@ export async function activate(context: vscode.ExtensionContext) {
  * Fetches the latest quota data from the Language Server
  */
 async function updateQuotaData(context: vscode.ExtensionContext, manual: boolean = false) {
+    const now = Date.now();
+
+    // Throttling: Return if not manual and within cooldown
+    if (!manual && (now - lastFetchTime < FETCH_COOLDOWN)) {
+        return;
+    }
 
     if (manual) {
         // Show loading state on all items
@@ -166,6 +174,8 @@ async function updateQuotaData(context: vscode.ExtensionContext, manual: boolean
             }
         });
     }
+
+    lastFetchTime = now;
 
     try {
         const { port, csrfToken } = await findLanguageServerInfo();
