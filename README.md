@@ -5,7 +5,8 @@
   <img src="MIKE-Quota.png" width="200" alt="M.I.K.E. Logo">
 </p>
 
-![Version](https://img.shields.io/badge/version-0.1.5-blue.svg)
+![Version](https://img.shields.io/badge/version-0.1.6-blue.svg)
+
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Telemetry](https://img.shields.io/badge/telemetry-ZERO-success.svg)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey.svg)
@@ -71,7 +72,7 @@ M.I.K.E. works out of the box with zero configuration across **macOS** and **Win
    - `GetCascadeModelConfigData` — primary source of model quota info.
    - `GetUserStatus` — fallback source for additional models.
 4. **Categorization:** The returned model configs are matched by label (e.g., `Gemini 3.1 Pro`, `Gemini 3 Flash`, `Claude`/`GPT`) and their `quotaInfo.remainingFraction` is extracted.
-5. **Display:** Three separate status bar items are updated every second with live countdown timers, and fresh data is fetched from the server every 60 seconds.
+5. **Display:** Three separate status bar items are updated every second with live countdown timers. For zero-impact tracking, fresh data is fetched from the server every 15 minutes, and strictly only if the VS Code window is currently in focus.
 
 ## 🚢 Deployment (to Antigravity Marketplace)
 

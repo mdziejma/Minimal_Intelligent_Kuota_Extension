@@ -131,9 +131,22 @@ export async function activate(context: vscode.ExtensionContext) {
     await updateQuotaData(context);
 
 
-    // Setup periodic data fetch (every 1 minute for better accuracy)
-    const dataFetchInterval = setInterval(() => updateQuotaData(context), 60000);
+
+    // Setup periodic data fetch (every 15 minutes, and only if window is focused)
+    const dataFetchInterval = setInterval(() => {
+        if (vscode.window.state.focused) {
+            updateQuotaData();
+        }
+    }, 900000);
+
     context.subscriptions.push({ dispose: () => clearInterval(dataFetchInterval) });
+
+    // Fetch data when the user returns to the editor
+    context.subscriptions.push(vscode.window.onDidChangeWindowState((e) => {
+        if (e.focused) {
+            updateQuotaData();
+        }
+    }));
 
     // Setup visual countdown update (every 1 second)
     countdownInterval = setInterval(() => updateStatusBarDisplay(), 1000);
@@ -157,24 +170,10 @@ async function updateQuotaData(context: vscode.ExtensionContext, manual: boolean
     try {
         const { port, csrfToken } = await findLanguageServerInfo();
 
-        // Fetch from BOTH endpoints for maximum coverage
+        // Stop leaky quotas: Only fetch from GetCascadeModelConfigData.
+        // GetUserStatus triggers remote API syncs from the language server.
         const cascadeData = await fetchEndpoint(port, csrfToken, '/exa.language_server_pb.LanguageServerService/GetCascadeModelConfigData');
-        const cascadeModels = cascadeData.clientModelConfigs || [];
-
-        // Also try GetUserStatus as a fallback source
-        let userModels: any[] = [];
-        try {
-            const userData = await fetchEndpoint(port, csrfToken, '/exa.language_server_pb.LanguageServerService/GetUserStatus');
-            userModels = userData.user?.cascadeModelConfigs?.clientModelConfigs || [];
-        } catch { /* ignore */ }
-
-        // Merge: cascade models are the primary source, user models fill gaps
-        const allModels = [...cascadeModels];
-        for (const um of userModels) {
-            if (!allModels.find((cm: any) => cm.label === um.label)) {
-                allModels.push(um);
-            }
-        }
+        const allModels = cascadeData.clientModelConfigs || [];
 
         lastSeenModels = allModels.map((m: any) => `- ${m.label} (Has Quota: ${!!m.quotaInfo})`);
 
