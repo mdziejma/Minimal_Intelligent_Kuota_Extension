@@ -5,6 +5,16 @@ All notable changes to the "Minimal Intelligent Kuota Extension" (MIKE-Quota) wi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-05-19
+
+### Added
+* **Dynamic Active-Model Selection:** The status bar items now automatically track the quota of whichever model is currently active/selected in the editor settings.
+* **All Available Quotas View:** The `showDetails` view now displays a complete list of all 7 available models, their exact quota percentages, reset times, and visually flags the currently active model with a `● [Active]` marker.
+* **Support for Gemini 3.5 Flash:** Added complete pattern matching for both Gemini 3.5 Flash (High) and Gemini 3.5 Flash (Medium) models.
+* **Support for Gemini 3.1 Pro Tiers:** Properly differentiates between Gemini 3.1 Pro (High) and Gemini 3.1 Pro (Low) tiers.
+* **Auto-Fallback to Critical Quotas:** If your active model is in another category, each status bar item automatically tracks the model in its category with the lowest remaining quota, ensuring you are always warned of potential exhaustion.
+* **Pre-configured Debug Launchers:** Added `.vscode/launch.json` and `.vscode/tasks.json` to make running and debugging the extension instant with `F5`.
+
 ## [2.0.0] - 2026-03-24
 
 ### Critical Fix: Antigravity 1.20.6 Quota Siphon
