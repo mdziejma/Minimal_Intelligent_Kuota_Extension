@@ -27,6 +27,7 @@ out/
 
 # Build Artifacts
 *.vsix
+binaries/
 
 # Generated Docs
 docs/images/

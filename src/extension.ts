@@ -24,6 +24,8 @@ interface QuotaDataPoint {
 const lastKnownPercentages: { [key: string]: number | null } = { pro: null, flash: null, ext: null };
 let countdownInterval: NodeJS.Timeout | undefined;
 let lastSeenModels: string[] = [];
+let allModelsWithQuotas: any[] = [];
+let activeModelId: string | undefined = undefined;
 let lastFetchTime = 0;
 const FETCH_COOLDOWN = 10 * 60 * 1000; // 10 minutes
 
@@ -90,7 +92,8 @@ export async function activate(context: vscode.ExtensionContext) {
 
         if (info.pro) {
             const p = Math.round(info.pro.quotaInfo.remainingFraction * 100);
-            detailMsg += `PRO: ${p}% (Resets at ${new Date(info.pro.quotaInfo.resetTime).toLocaleTimeString()})\n`;
+            const activeMarker = info.pro.modelOrAlias?.model === activeModelId ? " ● [Active]" : "";
+            detailMsg += `PRO (${info.pro.label})${activeMarker}: ${p}% (Resets at ${new Date(info.pro.quotaInfo.resetTime).toLocaleTimeString()})\n`;
             hasData = true;
         } else {
             detailMsg += `PRO: Unknown / Not Configured\n`;
@@ -98,7 +101,8 @@ export async function activate(context: vscode.ExtensionContext) {
 
         if (info.flash) {
             const p = Math.round(info.flash.quotaInfo.remainingFraction * 100);
-            detailMsg += `FLASH: ${p}% (Resets at ${new Date(info.flash.quotaInfo.resetTime).toLocaleTimeString()})\n`;
+            const activeMarker = info.flash.modelOrAlias?.model === activeModelId ? " ● [Active]" : "";
+            detailMsg += `FLASH (${info.flash.label})${activeMarker}: ${p}% (Resets at ${new Date(info.flash.quotaInfo.resetTime).toLocaleTimeString()})\n`;
             hasData = true;
         } else {
             detailMsg += `FLASH: Unknown / Not Configured\n`;
@@ -106,10 +110,22 @@ export async function activate(context: vscode.ExtensionContext) {
 
         if (info.ext) {
             const p = Math.round(info.ext.quotaInfo.remainingFraction * 100);
-            detailMsg += `EXTERNAL: ${p}% (Resets at ${new Date(info.ext.quotaInfo.resetTime).toLocaleTimeString()})\n`;
+            const activeMarker = info.ext.modelOrAlias?.model === activeModelId ? " ● [Active]" : "";
+            detailMsg += `EXTERNAL (${info.ext.label})${activeMarker}: ${p}% (Resets at ${new Date(info.ext.quotaInfo.resetTime).toLocaleTimeString()})\n`;
             hasData = true;
         } else {
             detailMsg += `EXTERNAL: Unknown / Not Configured\n`;
+        }
+
+        if (allModelsWithQuotas.length > 0) {
+            detailMsg += `\n--- All Available Quotas ---\n`;
+            allModelsWithQuotas.forEach((m: any) => {
+                const percentage = Math.round(m.quotaInfo.remainingFraction * 100);
+                const isActive = m.modelOrAlias?.model === activeModelId;
+                const activeMarker = isActive ? " ● [Active]" : "";
+                const resetTimeStr = new Date(m.quotaInfo.resetTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                detailMsg += `• ${m.label}${activeMarker}: ${percentage}% (Resets at ${resetTimeStr})\n`;
+            });
         }
 
         if (!hasData) {
@@ -182,10 +198,31 @@ async function updateQuotaData(context: vscode.ExtensionContext, manual: boolean
 
         lastSeenModels = allModels.map((m: any) => `- ${m.label} (Has Quota: ${!!m.quotaInfo})`);
 
+        // Extract all models with active quotaInfo
+        allModelsWithQuotas = allModels.filter((m: any) => m.quotaInfo);
+        activeModelId = cascadeData.defaultOverrideModelConfig?.modelOrAlias?.model;
+
         // Categorize models
-        activeQuotas.pro = allModels.find((m: any) => m.label.includes('Gemini 3.1 Pro') && m.quotaInfo);
-        activeQuotas.flash = allModels.find((m: any) => m.label.includes('Gemini 3 Flash') && m.quotaInfo);
-        activeQuotas.ext = allModels.find((m: any) => (m.label.includes('Claude') || m.label.includes('GPT')) && m.quotaInfo);
+        const proModels = allModels.filter((m: any) => m.label.includes('Gemini 3.1 Pro') && m.quotaInfo);
+        const flashModels = allModels.filter((m: any) => (m.label.includes('Gemini 3.5 Flash') || m.label.includes('Gemini 3 Flash')) && m.quotaInfo);
+        const extModels = allModels.filter((m: any) => (m.label.includes('Claude') || m.label.includes('GPT')) && m.quotaInfo);
+
+        // Helper to select the best model for a status bar category
+        const selectBestModel = (models: any[]) => {
+            if (models.length === 0) return undefined;
+            // 1. If one of them is the currently active/override model, choose it
+            const active = models.find((m: any) => m.modelOrAlias?.model === activeModelId);
+            if (active) return active;
+            // 2. Otherwise, choose the one with the lowest remaining quota fraction to warn the user
+            return models.reduce((lowest: any, current: any) => {
+                if (!lowest) return current;
+                return (current.quotaInfo.remainingFraction < lowest.quotaInfo.remainingFraction) ? current : lowest;
+            }, undefined);
+        };
+
+        activeQuotas.pro = selectBestModel(proModels);
+        activeQuotas.flash = selectBestModel(flashModels);
+        activeQuotas.ext = selectBestModel(extModels);
  
         // Log the data point (force save on manual refresh)
         logQuotaData(context, activeQuotas, manual);
@@ -440,9 +477,9 @@ function seedMockData(context: vscode.ExtensionContext) {
         const hour = i % 24;
         const stage = hour % 12;
         
-        let pro = 100;
-        let flash = 100;
-        let ext = 100;
+        let pro: number;
+        let flash: number;
+        const ext = 100;
 
         if (!isWeekend) {
             pro = Math.max(10, 100 - (stage * 9));
