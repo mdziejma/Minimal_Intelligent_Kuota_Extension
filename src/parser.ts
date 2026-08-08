@@ -1,6 +1,8 @@
 export interface LSInfo {
     pid: number;
     csrfToken: string;
+    extensionServerPort?: number;
+    extensionServerCsrfToken?: string;
 }
 
 /**
@@ -23,9 +25,14 @@ export function parseWindowsProcessList(stdout: string): LSInfo {
             throw new Error("CSRF token not found in command line.");
         }
 
+        const extPortMatch = target.CommandLine.match(/--extension_server_port\s+(\d+)/);
+        const extCsrfMatch = target.CommandLine.match(/--extension_server_csrf_token\s+([\S]+)/);
+
         return {
             pid: target.ProcessId,
-            csrfToken: csrfMatch[1]
+            csrfToken: csrfMatch[1],
+            extensionServerPort: extPortMatch ? parseInt(extPortMatch[1]) : undefined,
+            extensionServerCsrfToken: extCsrfMatch ? extCsrfMatch[1] : undefined
         };
     } catch (e) {
         if (e instanceof Error) {
@@ -59,6 +66,8 @@ export function parseUnixProcessList(stdout: string): LSInfo {
     const targetLine = lines[0];
     const csrfMatch = targetLine.match(/--csrf_token\s+([\S]+)/);
     const pidMatch = targetLine.match(/^\S+\s+(\d+)/);
+    const extPortMatch = targetLine.match(/--extension_server_port\s+(\d+)/);
+    const extCsrfMatch = targetLine.match(/--extension_server_csrf_token\s+([\S]+)/);
 
     if (!csrfMatch) {
         throw new Error("CSRF token not found in process list.");
@@ -69,7 +78,9 @@ export function parseUnixProcessList(stdout: string): LSInfo {
 
     return {
         pid: parseInt(pidMatch[1]),
-        csrfToken: csrfMatch[1]
+        csrfToken: csrfMatch[1],
+        extensionServerPort: extPortMatch ? parseInt(extPortMatch[1]) : undefined,
+        extensionServerCsrfToken: extCsrfMatch ? extCsrfMatch[1] : undefined
     };
 }
 
