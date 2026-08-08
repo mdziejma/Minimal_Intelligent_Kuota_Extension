@@ -1,9 +1,13 @@
 .git/**
+.github/**
 .vscode/**
 .agent/**
 archive/**
 binaries/**
+MIKE-Quota.png
 src/**
+test/**
+eslint.config.mjs
 tsconfig.json
 package-lock.json
 dist/*.map
@@ -13,3 +17,4 @@ out/**
 .project-actions.json
 control_deck.json
 *.vsix
+
