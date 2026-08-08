@@ -1,28 +1,16 @@
 {
     "actions": [
         {
-            "text": "$(zap) FAST",
-            "command": "python3 /Users/mdzie/GitHub/Mission_Initiation_and_Kommand_Evolution/scripts/update_control_deck.py --set mode RAPID_PROTOTYPE --set testing_suite OFF",
+            "text": "$(beaker) TEST",
+            "command": "npm test",
             "color": "#00C853",
-            "tooltip": "Switch to Fast Mode (No Tests)"
+            "tooltip": "Run Unit Tests & Lint"
         },
         {
-            "text": "$(shield) SAFE",
-            "command": "python3 /Users/mdzie/GitHub/Mission_Initiation_and_Kommand_Evolution/scripts/update_control_deck.py --set mode FORMAL_QA --set testing_suite ON",
-            "color": "#FFAB00",
-            "tooltip": "Switch to Safe Mode (Full Tests)"
-        },
-        {
-            "text": "$(play) SERVER",
-            "command": "python3 /Users/mdzie/GitHub/Mission_Initiation_and_Kommand_Evolution/scripts/run_action.py --action start_server",
+            "text": "$(bug) DEBUG",
+            "command": "workbench.action.debug.start",
             "color": "#FF6D00",
-            "tooltip": "Start the Server for Local Testing"
-        },
-        {
-            "text": "$(book) UPDATE DOCS",
-            "command": "python3 /Users/mdzie/GitHub/Mission_Initiation_and_Kommand_Evolution/scripts/run_action.py --action update_docs",
-            "color": "#2962FF",
-            "tooltip": "Regenerate Diagrams"
+            "tooltip": "Launch Extension Host Debugger (F5)"
         },
         {
             "text": "$(check) CHECK IN",
@@ -34,7 +22,7 @@
             "text": "$(rocket) DEPLOY",
             "command": "python3 /Users/mdzie/GitHub/Mission_Initiation_and_Kommand_Evolution/scripts/run_action.py --action deploy",
             "color": "#D50000",
-            "tooltip": "Run the Deploy Script"
+            "tooltip": "Package VSIX & Deploy Extension"
         }
     ]
 }

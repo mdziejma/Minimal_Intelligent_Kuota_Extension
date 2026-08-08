@@ -5,7 +5,7 @@
   <img src="MIKE-Quota.png" width="160" alt="M.I.K.E. Logo">
 </p>
 
-![Version](https://img.shields.io/badge/version-2.1.0-blue.svg)
+![Version](https://img.shields.io/badge/version-2.2.0-blue.svg)
 ![Telemetry](https://img.shields.io/badge/telemetry-ZERO-success.svg)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey.svg)
 
@@ -15,7 +15,7 @@ M.I.K.E. is a local, zero-telemetry extension for Antigravity that tracks your A
 
 ### ✨ Key Features
 - **Dynamic Tracking:** Automatically tracks whichever model is currently selected/active in your editor settings (`Gemini 3.5 Flash`, `Gemini 3.1 Pro`, `Claude Sonnet`, etc.).
-- **Passive Monitoring:** Monitors all 7 local quotas strictly through local IDE events with zero background pings or billable cloud heartbeats.
+- **Passive Monitoring:** Monitors all local quotas strictly through local IDE events with zero background pings or billable cloud heartbeats.
 - **Stealth Integration:** Auto-detects Language Server ports and CSRF tokens locally—no API keys required.
 - **Smart Displays:** Real-time `H:MM` countdowns and automatic HSL color shifting (Green → Red).
 - **Visual Analytics:** Built-in glassmorphic usage history plots to visualize consumption over time.
@@ -30,7 +30,7 @@ M.I.K.E. is a local, zero-telemetry extension for Antigravity that tracks your A
 ---
 
 ### 🛠️ How It Works
-M.I.K.E. operates as a 100% passive observer. On activation, it finds the local Language Server process, identifies its listening port, and fetches quota stats via the local `/GetCascadeModelConfigData` endpoint. 
+M.I.K.E. operates as a 100% passive observer. On activation, it finds the local Language Server process, identifies its listening port, and fetches quota stats via the local `/RetrieveUserQuotaSummary` and `/GetCascadeModelConfigData` endpoints. 
 
 To ensure zero "active usage" billing, data is **only** fetched on local IDE events (`onDidSaveTextDocument`, `onDidChangeWindowState`) subject to a hard **10-minute cooldown**. It never reaches out to the cloud.
 

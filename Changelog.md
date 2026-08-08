@@ -5,6 +5,14 @@ All notable changes to the "Minimal Intelligent Kuota Extension" (MIKE-Quota) wi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-08-08
+
+### Changed
+* **Daily and Weekly Quotas:** Replaced legacy Pro/Flash (High/Low) categorization with Google's updated Daily and Weekly model quota system.
+* **Smart Time Countdown:** Extended `formatTimeRemaining` to format reset durations >= 24 hours in human-readable `Xd Yh` format (e.g. `5d 14h`), while keeping `H:MM` for short-term daily resets.
+* **Updated Visualization Plot:** Updated the usage history webview legend and dataset styling to plot Daily, Weekly, and External quotas seamlessly.
+* **Backward Compatible History:** Automatically maps historical data points to the new Daily and Weekly chart series.
+
 ## [2.1.0] - 2026-05-19
 
 ### Added

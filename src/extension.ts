@@ -2,26 +2,29 @@ import * as vscode from 'vscode';
 import * as https from 'https';
 import { exec } from 'child_process';
 import { parseWindowsProcessList, parseWindowsPort, parseUnixProcessList, parseUnixPort } from './parser';
+import { formatTimeRemaining, isDailyModel, isWeeklyModel, isExternalModel, selectBestModel } from './quotaUtils';
 
-let proStatusBarItem: vscode.StatusBarItem;
-let flashStatusBarItem: vscode.StatusBarItem;
+let dailyStatusBarItem: vscode.StatusBarItem;
+let weeklyStatusBarItem: vscode.StatusBarItem;
 let extStatusBarItem: vscode.StatusBarItem;
+let outputChannel: vscode.OutputChannel;
 
 const activeQuotas: {
-    pro?: any;
-    flash?: any;
+    daily?: any;
+    weekly?: any;
     ext?: any;
 } = {};
- 
-interface QuotaDataPoint {
+
+export interface QuotaDataPoint {
     timestamp: number;
-    pro: number | null;
-    flash: number | null;
-    ext: number | null;
+    daily?: number | null;
+    weekly?: number | null;
+    ext?: number | null;
+    pro?: number | null;
+    flash?: number | null;
 }
 
-
-const lastKnownPercentages: { [key: string]: number | null } = { pro: null, flash: null, ext: null };
+const lastKnownPercentages: { [key: string]: number | null } = { daily: null, weekly: null, ext: null };
 let countdownInterval: NodeJS.Timeout | undefined;
 let lastSeenModels: string[] = [];
 let allModelsWithQuotas: any[] = [];
@@ -29,20 +32,28 @@ let activeModelId: string | undefined = undefined;
 let lastFetchTime = 0;
 const FETCH_COOLDOWN = 10 * 60 * 1000; // 10 minutes
 
+let lastDebugText = '';
+
+export { formatTimeRemaining, isDailyModel, isWeeklyModel, isExternalModel, selectBestModel };
+
+
 export async function activate(context: vscode.ExtensionContext) {
     console.log('Minimal Intelligent Kuota Extension is now active!');
 
-    // Create status bar items with priorities to keep them in order
-    // Pro (Leftmost), then Flash, then Ext (Rightmost)
-    proStatusBarItem = vscode.window.createStatusBarItem('mike.pro', vscode.StatusBarAlignment.Right, 1003);
-    proStatusBarItem.name = 'M.I.K.E. Pro';
-    proStatusBarItem.command = 'mikeQuota.showDetails';
-    context.subscriptions.push(proStatusBarItem);
+    outputChannel = vscode.window.createOutputChannel('M.I.K.E. Quota Debug');
+    context.subscriptions.push(outputChannel);
 
-    flashStatusBarItem = vscode.window.createStatusBarItem('mike.flash', vscode.StatusBarAlignment.Right, 1002);
-    flashStatusBarItem.name = 'M.I.K.E. Flash';
-    flashStatusBarItem.command = 'mikeQuota.showDetails';
-    context.subscriptions.push(flashStatusBarItem);
+    // Create status bar items with priorities to keep them in order
+    // Daily (Leftmost), then Weekly, then Ext (Rightmost)
+    dailyStatusBarItem = vscode.window.createStatusBarItem('mike.daily', vscode.StatusBarAlignment.Right, 1003);
+    dailyStatusBarItem.name = 'M.I.K.E. Daily Quota';
+    dailyStatusBarItem.command = 'mikeQuota.showDetails';
+    context.subscriptions.push(dailyStatusBarItem);
+
+    weeklyStatusBarItem = vscode.window.createStatusBarItem('mike.weekly', vscode.StatusBarAlignment.Right, 1002);
+    weeklyStatusBarItem.name = 'M.I.K.E. Weekly Quota';
+    weeklyStatusBarItem.command = 'mikeQuota.showDetails';
+    context.subscriptions.push(weeklyStatusBarItem);
 
     extStatusBarItem = vscode.window.createStatusBarItem('mike.ext', vscode.StatusBarAlignment.Right, 1001);
     extStatusBarItem.name = 'M.I.K.E. External';
@@ -54,13 +65,10 @@ export async function activate(context: vscode.ExtensionContext) {
         await updateQuotaData(context, true);
     }));
 
-
     // Register plot command
     context.subscriptions.push(vscode.commands.registerCommand('mikeQuota.showPlot', async () => {
         showQuotaPlotWebview(context);
     }));
-
-
 
     // Register debug history command
     context.subscriptions.push(vscode.commands.registerCommand('mikeQuota.debugHistory', () => {
@@ -84,34 +92,35 @@ export async function activate(context: vscode.ExtensionContext) {
     }));
 
     // Register detailed info command
-
     context.subscriptions.push(vscode.commands.registerCommand('mikeQuota.showDetails', async () => {
         const info = activeQuotas;
         let detailMsg = "M.I.K.E. Quota Status:\n\n";
         let hasData = false;
 
-        if (info.pro) {
-            const p = Math.round(info.pro.quotaInfo.remainingFraction * 100);
-            const activeMarker = info.pro.modelOrAlias?.model === activeModelId ? " ● [Active]" : "";
-            detailMsg += `PRO (${info.pro.label})${activeMarker}: ${p}% (Resets at ${new Date(info.pro.quotaInfo.resetTime).toLocaleTimeString()})\n`;
+        if (info.daily) {
+            const p = Math.round(info.daily.quotaInfo.remainingFraction * 100);
+            const activeMarker = info.daily.modelOrAlias?.model === activeModelId ? " ● [Active]" : "";
+            const resetStr = formatTimeRemaining(info.daily.quotaInfo.resetTime);
+            detailMsg += `DAILY/HOURLY (${info.daily.label})${activeMarker}: ${p}% (Resets in ${resetStr} at ${new Date(info.daily.quotaInfo.resetTime).toLocaleTimeString()})\n`;
             hasData = true;
         } else {
-            detailMsg += `PRO: Unknown / Not Configured\n`;
+            detailMsg += `DAILY/HOURLY: Unknown / Not Configured\n`;
         }
 
-        if (info.flash) {
-            const p = Math.round(info.flash.quotaInfo.remainingFraction * 100);
-            const activeMarker = info.flash.modelOrAlias?.model === activeModelId ? " ● [Active]" : "";
-            detailMsg += `FLASH (${info.flash.label})${activeMarker}: ${p}% (Resets at ${new Date(info.flash.quotaInfo.resetTime).toLocaleTimeString()})\n`;
+        if (info.weekly) {
+            const p = Math.round(info.weekly.quotaInfo.remainingFraction * 100);
+            const activeMarker = info.weekly.modelOrAlias?.model === activeModelId ? " ● [Active]" : "";
+            const resetStr = formatTimeRemaining(info.weekly.quotaInfo.resetTime);
+            detailMsg += `WEEKLY (${info.weekly.label})${activeMarker}: ${p}% (Resets in ${resetStr} at ${new Date(info.weekly.quotaInfo.resetTime).toLocaleTimeString()})\n`;
             hasData = true;
         } else {
-            detailMsg += `FLASH: Unknown / Not Configured\n`;
+            detailMsg += `WEEKLY: Unknown / Not Configured\n`;
         }
 
         if (info.ext) {
             const p = Math.round(info.ext.quotaInfo.remainingFraction * 100);
             const activeMarker = info.ext.modelOrAlias?.model === activeModelId ? " ● [Active]" : "";
-            detailMsg += `EXTERNAL (${info.ext.label})${activeMarker}: ${p}% (Resets at ${new Date(info.ext.quotaInfo.resetTime).toLocaleTimeString()})\n`;
+            detailMsg += `EXTERNAL (${info.ext.label})${activeMarker}: ${p}%\n`;
             hasData = true;
         } else {
             detailMsg += `EXTERNAL: Unknown / Not Configured\n`;
@@ -134,15 +143,23 @@ export async function activate(context: vscode.ExtensionContext) {
 
         detailMsg += `\n--- Debug Info ---\nModels Processed:\n${lastSeenModels.length > 0 ? lastSeenModels.join('\n') : 'None yet'}\n`;
 
-        vscode.window.showInformationMessage(detailMsg, "Refresh Now", "Show Usage Plot").then(selection => {
+        vscode.window.showInformationMessage(detailMsg, "Refresh Now", "Show Usage Plot", "Open Debug Log").then(async selection => {
             if (selection === "Refresh Now") {
                 vscode.commands.executeCommand('mikeQuota.refresh');
             } else if (selection === "Show Usage Plot") {
                 vscode.commands.executeCommand('mikeQuota.showPlot');
+            } else if (selection === "Open Debug Log") {
+                if (outputChannel) {
+                    outputChannel.show(true);
+                }
+                const doc = await vscode.workspace.openTextDocument({
+                    content: lastDebugText || "No debug log available yet. Click 'Refresh Now' first.",
+                    language: 'json'
+                });
+                await vscode.window.showTextDocument(doc);
             }
         });
     }));
-
 
     // Initial refresh and seed mock data if empty
     seedMockData(context);
@@ -178,10 +195,10 @@ async function updateQuotaData(context: vscode.ExtensionContext, manual: boolean
     }
 
     if (manual) {
-        // Show loading state on all items
-        [proStatusBarItem, flashStatusBarItem, extStatusBarItem].forEach(item => {
-            if (item.text.includes('%')) { // Only if already showing something
-                // Just keep it, or show a spin icon
+        // Keep status bar items visible during manual refresh
+        [dailyStatusBarItem, weeklyStatusBarItem, extStatusBarItem].forEach(item => {
+            if (item && item.text && item.text.includes('%')) {
+                // Keep current state visible
             }
         });
     }
@@ -191,10 +208,65 @@ async function updateQuotaData(context: vscode.ExtensionContext, manual: boolean
     try {
         const { port, csrfToken } = await findLanguageServerInfo();
 
-        // Stop leaky quotas: Only fetch from GetCascadeModelConfigData.
-        // GetUserStatus triggers remote API syncs from the language server.
+        // Fetch new quota summary
+        let summaryRes: any = null;
+        try {
+            summaryRes = await fetchEndpoint(port, csrfToken, '/exa.language_server_pb.LanguageServerService/RetrieveUserQuotaSummary');
+        } catch (e: any) {
+            // Ignore error, will fallback
+        }
+
         const cascadeData = await fetchEndpoint(port, csrfToken, '/exa.language_server_pb.LanguageServerService/GetCascadeModelConfigData');
         const allModels = cascadeData.clientModelConfigs || [];
+
+        let userStatusData: any = null;
+        try {
+            userStatusData = await fetchEndpoint(port, csrfToken, '/exa.language_server_pb.LanguageServerService/GetUserStatus');
+        } catch (e: any) {
+            userStatusData = { error: e.message };
+        }
+
+        const candidates = [
+            '/exa.language_server_pb.LanguageServerService/RetrieveUserQuotaSummary',
+            '/exa.language_server_pb.LanguageServerService/GetUserQuota',
+            '/exa.language_server_pb.LanguageServerService/GetUserQuotaList',
+            '/exa.language_server_pb.LanguageServerService/GetUserQuotas',
+            '/exa.language_server_pb.LanguageServerService/GetModelQuotas',
+            '/exa.language_server_pb.LanguageServerService/GetTierQuota',
+            '/exa.language_server_pb.LanguageServerService/GetQuotaInfo',
+            '/exa.language_server_pb.LanguageServerService/GetQuota',
+            '/exa.language_server_pb.LanguageServerService/GetCommandModelConfigs'
+        ];
+        const candidateResults: any = {};
+        for (const ep of candidates) {
+            try {
+                const res = await fetchEndpoint(port, csrfToken, ep);
+                candidateResults[ep] = res;
+            } catch (e: any) {
+                // Ignore failed endpoints
+            }
+        }
+
+        const extList = vscode.extensions.all.map(e => `${e.id} (active: ${e.isActive})`);
+        const geminiExt = vscode.extensions.getExtension('google.geminicodeassist') || vscode.extensions.getExtension('antigravity');
+
+        const debugLogContent = [
+            `=== Quota Refresh [${new Date().toLocaleTimeString()}] ===`,
+            `Active Model ID: ${activeModelId}`,
+            `Total Models: ${allModels.length}`,
+            `Target Extension: ${geminiExt?.id} (active: ${geminiExt?.isActive})`,
+            `Target Exports: ${JSON.stringify(geminiExt?.exports)}`,
+            `Quota Summary Response:\n${JSON.stringify(summaryRes, null, 2)}`,
+            `Candidate Probes Succeeded:\n${JSON.stringify(candidateResults, null, 2)}`,
+            `GetUserStatus Response:\n${JSON.stringify(userStatusData, null, 2)}`,
+            `Raw Cascade Data:\n${JSON.stringify(cascadeData, null, 2)}`
+        ].join('\n\n');
+
+        lastDebugText = debugLogContent;
+
+        if (outputChannel) {
+            outputChannel.appendLine(`\n${debugLogContent}`);
+        }
 
         lastSeenModels = allModels.map((m: any) => `- ${m.label} (Has Quota: ${!!m.quotaInfo})`);
 
@@ -202,32 +274,75 @@ async function updateQuotaData(context: vscode.ExtensionContext, manual: boolean
         allModelsWithQuotas = allModels.filter((m: any) => m.quotaInfo);
         activeModelId = cascadeData.defaultOverrideModelConfig?.modelOrAlias?.model;
 
-        // Categorize models
-        const proModels = allModels.filter((m: any) => m.label.includes('Gemini 3.1 Pro') && m.quotaInfo);
-        const flashModels = allModels.filter((m: any) => (m.label.includes('Gemini 3.5 Flash') || m.label.includes('Gemini 3 Flash')) && m.quotaInfo);
-        const extModels = allModels.filter((m: any) => (m.label.includes('Claude') || m.label.includes('GPT')) && m.quotaInfo);
+        let dailyBucket = null;
+        let weeklyBucket = null;
+        let extBucket = null;
 
-        // Helper to select the best model for a status bar category
-        const selectBestModel = (models: any[]) => {
-            if (models.length === 0) return undefined;
-            // 1. If one of them is the currently active/override model, choose it
-            const active = models.find((m: any) => m.modelOrAlias?.model === activeModelId);
-            if (active) return active;
-            // 2. Otherwise, choose the one with the lowest remaining quota fraction to warn the user
-            return models.reduce((lowest: any, current: any) => {
-                if (!lowest) return current;
-                return (current.quotaInfo.remainingFraction < lowest.quotaInfo.remainingFraction) ? current : lowest;
-            }, undefined);
-        };
+        if (summaryRes && summaryRes.response && summaryRes.response.groups) {
+            for (const group of summaryRes.response.groups) {
+                if (group.buckets) {
+                    for (const bucket of group.buckets) {
+                        const bucketQuota = {
+                            label: bucket.displayName || bucket.bucketId,
+                            quotaInfo: {
+                                remainingFraction: bucket.remainingFraction,
+                                resetTime: bucket.resetTime
+                            }
+                        };
+                        if (bucket.bucketId === 'gemini-5h') {
+                            dailyBucket = bucketQuota;
+                        } else if (bucket.bucketId === 'gemini-weekly') {
+                            weeklyBucket = bucketQuota;
+                        } else if (bucket.bucketId === '3p-5h') {
+                            extBucket = bucketQuota;
+                        } else if (bucket.bucketId === '3p-weekly' && !extBucket) {
+                            extBucket = bucketQuota;
+                        }
+                    }
+                }
+            }
+        }
 
-        activeQuotas.pro = selectBestModel(proModels);
-        activeQuotas.flash = selectBestModel(flashModels);
-        activeQuotas.ext = selectBestModel(extModels);
- 
+        // Fallback for older LS versions
+        if (!dailyBucket && !weeklyBucket && !extBucket) {
+            // Categorize models into Daily, Weekly, and External
+            const dailyModels = allModels.filter((m: any) => isDailyModel(m, now));
+            const weeklyModels = allModels.filter((m: any) => isWeeklyModel(m, now));
+            const extModels = allModels.filter((m: any) => isExternalModel(m));
+
+            if (outputChannel) {
+                outputChannel.appendLine(`Categorization Fallback -> Daily: ${dailyModels.length}, Weekly: ${weeklyModels.length}, Ext: ${extModels.length}`);
+            }
+
+            // Helper to select the best model for a status bar category
+            const selectBestModelForCategory = (models: any[]) => {
+                if (models.length === 0) return undefined;
+                const active = models.find((m: any) => m.modelOrAlias?.model === activeModelId);
+                if (active) return active;
+                return models.reduce((lowest: any, current: any) => {
+                    if (!lowest) return current;
+                    return (current.quotaInfo.remainingFraction < lowest.quotaInfo.remainingFraction) ? current : lowest;
+                }, undefined);
+            };
+
+            dailyBucket = selectBestModelForCategory(dailyModels);
+            weeklyBucket = selectBestModelForCategory(weeklyModels);
+            extBucket = selectBestModelForCategory(extModels);
+        }
+
+        activeQuotas.daily = dailyBucket;
+        activeQuotas.weekly = weeklyBucket;
+        activeQuotas.ext = extBucket;
+
+        if (outputChannel) {
+            outputChannel.appendLine(`Selected Daily: ${activeQuotas.daily?.label} (${activeQuotas.daily ? Math.round(activeQuotas.daily.quotaInfo.remainingFraction * 100) : 'N/A'}%)`);
+            outputChannel.appendLine(`Selected Weekly: ${activeQuotas.weekly?.label} (${activeQuotas.weekly ? Math.round(activeQuotas.weekly.quotaInfo.remainingFraction * 100) : 'N/A'}%)`);
+            outputChannel.appendLine(`Selected Ext: ${activeQuotas.ext?.label} (${activeQuotas.ext ? Math.round(activeQuotas.ext.quotaInfo.remainingFraction * 100) : 'N/A'}%)`);
+        }
+
         // Log the data point (force save on manual refresh)
         logQuotaData(context, activeQuotas, manual);
 
- 
         updateStatusBarDisplay();
 
         if (manual) {
@@ -235,8 +350,8 @@ async function updateQuotaData(context: vscode.ExtensionContext, manual: boolean
         }
 
         // Check for alerts (Transitions from high to low)
-        checkAlerts('pro', activeQuotas.pro);
-        checkAlerts('flash', activeQuotas.flash);
+        checkAlerts('daily', activeQuotas.daily);
+        checkAlerts('weekly', activeQuotas.weekly);
         checkAlerts('ext', activeQuotas.ext);
 
     } catch (err) {
@@ -246,54 +361,54 @@ async function updateQuotaData(context: vscode.ExtensionContext, manual: boolean
         }
     }
 }
- 
+
 /**
  * Logs a new data point to the persistent history
  */
 function logQuotaData(context: vscode.ExtensionContext, data: any, force: boolean = false) {
-
     const history: QuotaDataPoint[] = context.globalState.get('quotaHistory', []);
-    
+
     const now = Date.now();
     const lastPoint = history.length > 0 ? history[history.length - 1] : null;
-    
-    // Only log if something changed or if it's been more than 15 minutes since last log
-    const pro = data.pro ? Math.round(data.pro.quotaInfo.remainingFraction * 100) : null;
-    const flash = data.flash ? Math.round(data.flash.quotaInfo.remainingFraction * 100) : null;
-    const ext = data.ext ? Math.round(data.ext.quotaInfo.remainingFraction * 100) : null;
-    
-    const hasChanged = !lastPoint || 
-        lastPoint.pro !== pro || 
-        lastPoint.flash !== flash || 
-        lastPoint.ext !== ext;
-    
-    const isOld = !lastPoint || (now - lastPoint.timestamp) > 15 * 60 * 1000;
-    
-    if (hasChanged || isOld || force) {
 
-        history.push({ timestamp: now, pro, flash, ext });
-        
-        // Keep last 2016 points (about 1-2 weeks of data if logged every 5-15 mins)
-        // Actually since we log on change, 2016 points could last a long time.
+    const daily = data.daily ? Math.round(data.daily.quotaInfo.remainingFraction * 100) : null;
+    const weekly = data.weekly ? Math.round(data.weekly.quotaInfo.remainingFraction * 100) : null;
+    const ext = data.ext ? Math.round(data.ext.quotaInfo.remainingFraction * 100) : null;
+
+    const lastDaily = lastPoint ? (lastPoint.daily ?? lastPoint.pro ?? null) : null;
+    const lastWeekly = lastPoint ? (lastPoint.weekly ?? lastPoint.flash ?? null) : null;
+    const lastExt = lastPoint ? (lastPoint.ext ?? null) : null;
+
+    const hasChanged = !lastPoint ||
+        lastDaily !== daily ||
+        lastWeekly !== weekly ||
+        lastExt !== ext;
+
+    const isOld = !lastPoint || (now - lastPoint.timestamp) > 15 * 60 * 1000;
+
+    if (hasChanged || isOld || force) {
+        history.push({ timestamp: now, daily, weekly, ext });
+
         if (history.length > 5000) {
             history.shift();
         }
-        
+
         context.globalState.update('quotaHistory', history);
     }
 }
-
 
 /**
  * Updates the visual display of status bar items without fetching new data
  */
 function updateStatusBarDisplay() {
-    updateSingleItem(proStatusBarItem, activeQuotas.pro, "$(star-full)", "PRO");
-    updateSingleItem(flashStatusBarItem, activeQuotas.flash, "$(zap)", "FLASH");
-    updateSingleItem(extStatusBarItem, activeQuotas.ext, "$(globe)", "EXT");
+    updateSingleItem(dailyStatusBarItem, activeQuotas.daily, "$(clock)", "DAILY/HOURLY", true);
+    updateSingleItem(weeklyStatusBarItem, activeQuotas.weekly, "$(calendar)", "WEEKLY", true);
+    updateSingleItem(extStatusBarItem, activeQuotas.ext, "$(globe)", "EXT", false);
 }
 
-function updateSingleItem(item: vscode.StatusBarItem, data: any, icon: string, label: string) {
+function updateSingleItem(item: vscode.StatusBarItem, data: any, icon: string, label: string, showTime: boolean = true) {
+    if (!item) return;
+
     if (!data || !data.quotaInfo) {
         item.text = `${icon} --%`;
         item.tooltip = `${label} Quota (Not Configured or Unknown)`;
@@ -304,18 +419,18 @@ function updateSingleItem(item: vscode.StatusBarItem, data: any, icon: string, l
     }
 
     const percentage = Math.round(data.quotaInfo.remainingFraction * 100);
-    const timeRemaining = formatTimeRemaining(data.quotaInfo.resetTime);
 
-    // Icon + Percentage + Short Countdown (H:MM)
-    item.text = `${icon} ${percentage}% ${timeRemaining}`;
-    item.tooltip = `${label} Quota (${data.label})\nResets in: ${timeRemaining}\nAt: ${new Date(data.quotaInfo.resetTime).toLocaleTimeString()}\nClick for details & History Plot.`;
-
+    if (showTime) {
+        const timeRemaining = formatTimeRemaining(data.quotaInfo.resetTime);
+        item.text = `${icon} ${percentage}% ${timeRemaining}`;
+        item.tooltip = `${label} Quota (${data.label})\nResets in: ${timeRemaining}\nAt: ${new Date(data.quotaInfo.resetTime).toLocaleTimeString()}\nClick for details & History Plot.`;
+    } else {
+        item.text = `${icon} ${percentage}%`;
+        item.tooltip = `${label} Quota (${data.label})\nRemaining: ${percentage}%\nClick for details & History Plot.`;
+    }
 
     // Smooth gradient color: Green (100%) -> Yellow (50%) -> Red (0%)
-    // Using HSL: H=120 is green, H=60 is yellow, H=0 is red
-    // Map percentage (0-100) to hue (0-120)
     const hue = Math.round((percentage / 100) * 120);
-    // Keep saturation high, lightness at ~60% for good visibility on dark backgrounds
     item.color = `hsl(${hue}, 100%, 60%)`;
 
     // Add background highlight for critically low quota (<=15%)
@@ -326,21 +441,6 @@ function updateSingleItem(item: vscode.StatusBarItem, data: any, icon: string, l
     }
 
     item.show();
-}
-
-function formatTimeRemaining(resetTime: string): string {
-    const now = Date.now();
-    const reset = new Date(resetTime).getTime();
-    const diff = reset - now;
-
-    if (diff <= 0) return "0:00";
-
-    const totalSeconds = Math.floor(diff / 1000);
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-
-    // Format as H:MM
-    return `${hours}:${minutes.toString().padStart(2, '0')}`;
 }
 
 function checkAlerts(key: string, data: any) {
@@ -355,14 +455,11 @@ function checkAlerts(key: string, data: any) {
     lastKnownPercentages[key] = percentage;
 }
 
-
-
 function findLanguageServerInfo(): Promise<{ port: number; csrfToken: string }> {
     return new Promise((resolve, reject) => {
         const isWindows = process.platform === 'win32';
 
         if (isWindows) {
-            // Windows logic: Using powershell to find the process and its command line
             const psCommand = `powershell -Command "Get-WmiObject Win32_Process -Filter \\"Name LIKE 'language_server_windows%'\\" | Select-Object CommandLine, ProcessId | ConvertTo-Json"`;
             exec(psCommand, (psError, psStdout) => {
                 if (psError || !psStdout) return reject(new Error("Language Server not running (or PowerShell failed)."));
@@ -370,7 +467,6 @@ function findLanguageServerInfo(): Promise<{ port: number; csrfToken: string }> 
                 try {
                     const { pid, csrfToken } = parseWindowsProcessList(psStdout);
 
-                    // Find the listening port for this PID
                     const netstatCommand = `netstat -ano | findstr LISTENING | findstr ${pid}`;
                     exec(netstatCommand, (nsError, nsStdout) => {
                         if (nsError || !nsStdout) return reject(new Error("No network ports found for LS PID."));
@@ -387,7 +483,6 @@ function findLanguageServerInfo(): Promise<{ port: number; csrfToken: string }> 
                 }
             });
         } else {
-            // macOS / Linux logic
             const psCommand = "ps aux | grep -v grep | grep -E 'language_server_macos|language_server_macos_arm|language_server_linux'";
             exec(psCommand, (psError, psStdout) => {
                 if (psError || !psStdout) return reject(new Error("Language Server not running."));
@@ -448,8 +543,8 @@ function fetchEndpoint(port: number, csrfToken: string, endpoint: string): Promi
 }
 
 export function deactivate() {
-    if (proStatusBarItem) proStatusBarItem.dispose();
-    if (flashStatusBarItem) flashStatusBarItem.dispose();
+    if (dailyStatusBarItem) dailyStatusBarItem.dispose();
+    if (weeklyStatusBarItem) weeklyStatusBarItem.dispose();
     if (extStatusBarItem) extStatusBarItem.dispose();
     if (countdownInterval) clearInterval(countdownInterval);
 }
@@ -465,45 +560,38 @@ function seedMockData(context: vscode.ExtensionContext) {
     const now = Date.now();
     const oneHour = 60 * 60 * 1000;
 
-    // Generate 14 days of data points (every 2 hours to keep it readable but dense)
     for (let i = 14 * 24; i >= 0; i -= 2) {
         const ts = now - (i * oneHour);
-        
-        // Create distinct usage patterns for different models
-        // Pro is heavy on weekdays, Flash is steady, Ext is occasional bursts
         const dayOfWeek = new Date(ts).getDay();
         const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-        
+
         const hour = i % 24;
         const stage = hour % 12;
-        
-        let pro: number;
-        let flash: number;
+
+        let daily: number;
+        let weekly: number;
         const ext = 100;
 
         if (!isWeekend) {
-            pro = Math.max(10, 100 - (stage * 9));
-            flash = Math.max(30, 100 - (stage * 5));
+            daily = Math.max(10, 100 - (stage * 9));
+            weekly = Math.max(30, 100 - Math.floor(i / 10));
         } else {
-            pro = Math.max(70, 100 - (stage * 2));
-            flash = Math.max(60, 100 - (stage * 3));
+            daily = Math.max(70, 100 - (stage * 2));
+            weekly = Math.max(50, 100 - Math.floor(i / 10));
         }
 
-        // Add some "burps" of high usage
-        if (i % 48 === 0) pro = 5; 
+        if (i % 48 === 0) daily = 5;
 
         mockData.push({
             timestamp: ts,
-            pro,
-            flash,
+            daily,
+            weekly,
             ext
         });
     }
 
     context.globalState.update('quotaHistory', mockData);
 }
-
-
 
 /**
  * Creates and shows the webview with quota history plot
@@ -521,7 +609,6 @@ function showQuotaPlotWebview(context: vscode.ExtensionContext) {
 
     const history = context.globalState.get<QuotaDataPoint[]>('quotaHistory', []);
     if (history.length === 0) {
-        // One last attempt to seed if it's still empty for some reason
         seedMockData(context);
     }
     vscode.window.setStatusBarMessage(`Opening plot with ${history.length} data points...`, 3000);
@@ -543,8 +630,8 @@ function getWebviewContent(history: QuotaDataPoint[]) {
             --bg-color: #0d1117;
             --card-bg: rgba(22, 27, 34, 0.7);
             --text-color: #c9d1d9;
-            --accent-pro: #00ff88;
-            --accent-flash: #ffff00;
+            --accent-daily: #00ff88;
+            --accent-weekly: #a855f7;
             --accent-ext: #00d2ff;
             --btn-bg: rgba(255, 255, 255, 0.05);
             --btn-active: rgba(255, 255, 255, 0.15);
@@ -624,8 +711,8 @@ function getWebviewContent(history: QuotaDataPoint[]) {
             height: 8px;
             border-radius: 50%;
         }
-        .dot-pro { background-color: var(--accent-pro); box-shadow: 0 0 10px var(--accent-pro); }
-        .dot-flash { background-color: var(--accent-flash); box-shadow: 0 0 10px var(--accent-flash); }
+        .dot-daily { background-color: var(--accent-daily); box-shadow: 0 0 10px var(--accent-daily); }
+        .dot-weekly { background-color: var(--accent-weekly); box-shadow: 0 0 10px var(--accent-weekly); }
         .dot-ext { background-color: var(--accent-ext); box-shadow: 0 0 10px var(--accent-ext); }
         
         canvas {
@@ -646,8 +733,8 @@ function getWebviewContent(history: QuotaDataPoint[]) {
         <div class="title-group">
             <h1>Quota History</h1>
             <div class="stats-legend">
-                <div class="stat-item"><span class="dot dot-pro"></span> Gemini Pro</div>
-                <div class="stat-item"><span class="dot dot-flash"></span> Gemini Flash</div>
+                <div class="stat-item"><span class="dot dot-daily"></span> Daily Quota</div>
+                <div class="stat-item"><span class="dot dot-weekly"></span> Weekly Quota</div>
                 <div class="stat-item"><span class="dot dot-ext"></span> External</div>
             </div>
         </div>
@@ -677,8 +764,8 @@ function getWebviewContent(history: QuotaDataPoint[]) {
             
             const datasets = [
                 {
-                    label: 'Pro',
-                    data: filtered.map(p => ({ x: p.timestamp, y: p.pro })),
+                    label: 'Daily Quota',
+                    data: filtered.map(p => ({ x: p.timestamp, y: (p.daily !== undefined && p.daily !== null) ? p.daily : p.pro })),
                     borderColor: '#00ff88',
                     backgroundColor: 'rgba(0, 255, 136, 0.05)',
                     borderWidth: 2.5,
@@ -687,10 +774,10 @@ function getWebviewContent(history: QuotaDataPoint[]) {
                     fill: true
                 },
                 {
-                    label: 'Flash',
-                    data: filtered.map(p => ({ x: p.timestamp, y: p.flash })),
-                    borderColor: '#ffff00',
-                    backgroundColor: 'rgba(255, 255, 0, 0.05)',
+                    label: 'Weekly Quota',
+                    data: filtered.map(p => ({ x: p.timestamp, y: (p.weekly !== undefined && p.weekly !== null) ? p.weekly : p.flash })),
+                    borderColor: '#a855f7',
+                    backgroundColor: 'rgba(168, 85, 247, 0.05)',
                     borderWidth: 2.5,
                     pointRadius: filtered.length > 100 ? 0 : 2,
                     tension: 0.3,
