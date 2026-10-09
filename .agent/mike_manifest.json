@@ -6,9 +6,7 @@
   "description": "Minimal Intelligent Kuota Extension",
   "git": {
     "remote": "https://github.com/mdziejma/Minimal_Intelligent_Kuota_Extension.git",
-    "default_branch": "Development_7",
-    "last_activity": "2026-08-08 11:04:24 -0400",
-    "is_dirty": true
+    "default_branch": "Development_7"
   },
   "cloud": {
     "primary_project_id": null,
@@ -88,6 +86,5 @@
       "command": "npm run test",
       "label": "Test"
     }
-  },
-  "last_harvested": "2026-10-09"
+  }
 }
