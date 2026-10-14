@@ -2,12 +2,17 @@
 **Minimal Intelligent Kuota Extension**
 
 <p align="center">
-  <img src="MIKE-Quota.png" width="160" alt="M.I.K.E. Logo">
+  <img src="https://raw.githubusercontent.com/mdziejma/Minimal_Intelligent_Kuota_Extension/main/MIKE-Quota.png" width="160" alt="M.I.K.E. Logo">
 </p>
 
-![Version](https://img.shields.io/badge/version-2.2.0-blue.svg)
-![Telemetry](https://img.shields.io/badge/telemetry-ZERO-success.svg)
-![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey.svg)
+<p align="left">
+  <a href="https://marketplace.visualstudio.com/items?itemName=mdzie.minimal-intelligent-kuota-extension"><img src="https://img.shields.io/visual-studio-marketplace/v/mdzie.minimal-intelligent-kuota-extension?style=flat-square&label=VS%20Marketplace&logo=visual-studio-code" alt="VS Marketplace Version" /></a>
+  <a href="https://marketplace.visualstudio.com/items?itemName=mdzie.minimal-intelligent-kuota-extension"><img src="https://img.shields.io/visual-studio-marketplace/d/mdzie.minimal-intelligent-kuota-extension?style=flat-square&label=Marketplace%20Downloads" alt="VS Marketplace Downloads" /></a>
+  <a href="https://open-vsx.org/extension/mdzie/minimal-intelligent-kuota-extension"><img src="https://img.shields.io/open-vsx/v/mdzie/minimal-intelligent-kuota-extension?style=flat-square&label=Open%20VSX" alt="Open VSX Version" /></a>
+  <a href="https://open-vsx.org/extension/mdzie/minimal-intelligent-kuota-extension"><img src="https://img.shields.io/open-vsx/dt/mdzie/minimal-intelligent-kuota-extension?style=flat-square&label=Open%20VSX%20Downloads&color=orange" alt="Open VSX Downloads" /></a>
+  <img src="https://img.shields.io/badge/telemetry-ZERO-success.svg?style=flat-square" alt="Telemetry" />
+  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey.svg?style=flat-square" alt="Platform" />
+</p>
 
 M.I.K.E. is a local, zero-telemetry extension for Antigravity that tracks your AI quota in the status bar. It intercepts local traffic to display real-time usage without sending data to external servers.
 

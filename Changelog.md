@@ -5,6 +5,12 @@ All notable changes to the "Minimal Intelligent Kuota Extension" (MIKE-Quota) wi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-10-13
+
+### Added
+* **Dual-Registry Support:** Official simultaneous release across both the **Microsoft Visual Studio Code Marketplace** and the **Open VSX Registry**.
+* **Unified Packaging & Publishing Pipeline:** Standardized `.vsix` packaging manifest with embedded repository, support, and documentation links and dual-registry shields.
+
 ## [2.2.0] - 2026-08-08
 
 ### Changed
