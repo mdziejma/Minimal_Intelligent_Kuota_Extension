@@ -1,0 +1,90 @@
+{
+  "$schema": "https://mike-llc-ct.web.app/schemas/mike-manifest.v1.json",
+  "name": "Minimal_Intelligent_Kuota_Extension",
+  "display_name": "Minimal Intelligent Kuota Extension",
+  "archetype": "VS Code / IDE Extension",
+  "description": "Minimal Intelligent Kuota Extension",
+  "git": {
+    "remote": "https://github.com/mdziejma/Minimal_Intelligent_Kuota_Extension.git",
+    "default_branch": "Development_7"
+  },
+  "cloud": {
+    "primary_project_id": null,
+    "billing_plan": "None",
+    "all_gcp_projects": [],
+    "hosting_targets": [],
+    "hosting_urls": [],
+    "has_firestore": false,
+    "has_realtime_db": false,
+    "has_storage": false,
+    "has_cloud_run": false
+  },
+  "ai_runtime": {
+    "has_ai": false,
+    "sdks": [],
+    "auth_methods": [],
+    "models_in_use": {},
+    "deprecation_watch": []
+  },
+  "agent_harness": {
+    "primary_agent": "antigravity-white",
+    "mcp_servers": [
+      "file-writer"
+    ],
+    "active_skills": [
+      "audio_design"
+    ],
+    "context_budget": "128k"
+  },
+  "env_contract": {
+    "required_vars": [],
+    "sample_file": null
+  },
+  "security_watch": {
+    "active_cves": [],
+    "audit_status": "clean"
+  },
+  "compute": {
+    "requires_gpu": false,
+    "gpu_frameworks": []
+  },
+  "subcomponents": [],
+  "actions": {
+    "beaker test": {
+      "label": "$(beaker) TEST",
+      "command": "npm test",
+      "tooltip": "Run Unit Tests & Lint"
+    },
+    "bug debug": {
+      "label": "$(bug) DEBUG",
+      "command": "workbench.action.debug.start",
+      "tooltip": "Launch Extension Host Debugger (F5)"
+    },
+    "check check in": {
+      "label": "$(check) CHECK IN",
+      "command": "python3 /Users/mdzie/GitHub/Mission_Initiation_and_Kommand_Evolution/scripts/run_action.py --action checkin",
+      "tooltip": "Check in code"
+    },
+    "rocket deploy": {
+      "label": "$(rocket) DEPLOY",
+      "command": "python3 /Users/mdzie/GitHub/Mission_Initiation_and_Kommand_Evolution/scripts/run_action.py --action deploy",
+      "tooltip": "Package VSIX & Deploy Extension"
+    },
+    "server": {
+      "command": "npm run watch",
+      "label": "Start Server"
+    },
+    "deploy": {
+      "command": "npm run compile && npx @vscode/vsce package",
+      "label": "Deploy"
+    },
+    "checkin": {
+      "command": "git add . && git commit -m 'wip' && git push",
+      "label": "Checkin"
+    },
+    "test": {
+      "command": "npm run test",
+      "label": "Test"
+    }
+  }
+}

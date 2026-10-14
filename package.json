@@ -3,17 +3,30 @@
     "displayName": "Minimal Intelligent Kuota Extension",
     "description": "M.I.K.E. — Zero-telemetry AI quota tracker for your status bar",
 
-    "version": "2.2.0",
+    "version": "2.3.0",
 
 
     "publisher": "mdzie",
-    "icon": "MIKE-Quota.png",
+    "icon": "icon.png",
     "repository": {
         "type": "git",
         "url": "https://github.com/mdziejma/Minimal_Intelligent_Kuota_Extension.git"
     },
     "engines": {
         "vscode": "^1.75.0"
+    },
+    "keywords": [
+        "antigravity",
+        "quota",
+        "status-bar",
+        "telemetry",
+        "ai",
+        "gemini",
+        "claude"
+    ],
+    "homepage": "https://github.com/mdziejma/Minimal_Intelligent_Kuota_Extension#readme",
+    "bugs": {
+        "url": "https://github.com/mdziejma/Minimal_Intelligent_Kuota_Extension/issues"
     },
     "categories": [
         "Other"
@@ -48,9 +61,13 @@
         "watch": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --watch",
         "pretest": "npm run compile && npm run lint",
         "lint": "eslint src --ext ts",
-        "package": "vsce package && mkdir -p binaries && mv *.vsix binaries/",
+        "package": "npm run compile && node scripts/package_vsix.mjs",
+        "package:vsix": "npm run package",
         "compile-build": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node",
-        "deploy": "ovsx publish",
+        "publish:ovsx": "node scripts/publish_ovsx.mjs",
+        "publish:vscode": "node scripts/publish_vscode.mjs",
+        "publish:all": "node scripts/publish_all.mjs",
+        "deploy": "node scripts/publish_all.mjs",
         "test": "mocha -r ts-node/register test/**/*.test.ts"
     },
     "devDependencies": {
