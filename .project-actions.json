@@ -1,28 +1,74 @@
 {
-    "actions": [
-        {
-            "text": "$(beaker) TEST",
-            "command": "npm test",
-            "color": "#00C853",
-            "tooltip": "Run Unit Tests & Lint"
-        },
-        {
-            "text": "$(bug) DEBUG",
-            "command": "workbench.action.debug.start",
-            "color": "#FF6D00",
-            "tooltip": "Launch Extension Host Debugger (F5)"
-        },
-        {
-            "text": "$(check) CHECK IN",
-            "command": "python3 /Users/mdzie/GitHub/Mission_Initiation_and_Kommand_Evolution/scripts/run_action.py --action checkin",
-            "color": "#6200EA",
-            "tooltip": "Check in code"
-        },
-        {
-            "text": "$(rocket) DEPLOY",
-            "command": "python3 /Users/mdzie/GitHub/Mission_Initiation_and_Kommand_Evolution/scripts/run_action.py --action deploy",
-            "color": "#D50000",
-            "tooltip": "Package VSIX & Deploy Extension"
-        }
-    ]
+  "version": "2.0.0",
+  "archetype": "vscode-extension",
+  "actions": [
+    {
+      "id": "build",
+      "label": "🔨 Build",
+      "text": "$(tools) BUILD",
+      "command": "npm run compile",
+      "description": "Bundle TypeScript sources into ./dist/extension.js.",
+      "tooltip": "Bundle TypeScript sources into ./dist/extension.js."
+    },
+    {
+      "id": "test",
+      "label": "🧪 Run Tests",
+      "text": "$(beaker) TEST",
+      "command": "npm test",
+      "color": "#00C853",
+      "description": "Compile, lint, and run Mocha unit test suite.",
+      "tooltip": "Run Unit Tests & Lint"
+    },
+    {
+      "id": "debug",
+      "label": "🐛 Debug Extension",
+      "text": "$(bug) DEBUG",
+      "command": "workbench.action.debug.start",
+      "color": "#FF6D00",
+      "description": "Launch Extension Host Debugger (F5).",
+      "tooltip": "Launch Extension Host Debugger (F5)"
+    },
+    {
+      "id": "package",
+      "label": "📦 Package VSIX",
+      "text": "$(package) PACKAGE",
+      "command": "npm run package",
+      "description": "Compile and package standalone .vsix extension bundle.",
+      "tooltip": "Compile and package standalone .vsix extension bundle."
+    },
+    {
+      "id": "publish_ovsx",
+      "label": "🌐 Publish Open VSX",
+      "text": "$(cloud-upload) OPEN-VSX",
+      "command": "npm run publish:ovsx",
+      "description": "Publish packaged VSIX artifact to Open VSX Registry (prompts for PAT).",
+      "tooltip": "Publish packaged VSIX artifact to Open VSX Registry (prompts for PAT)."
+    },
+    {
+      "id": "publish_vscode",
+      "label": "🛍️ Publish MS Marketplace",
+      "text": "$(extensions) MS-MARKET",
+      "command": "npm run publish:vscode",
+      "description": "Publish packaged VSIX artifact to Microsoft VS Code Marketplace (prompts for VSCE_PAT).",
+      "tooltip": "Publish packaged VSIX artifact to Microsoft VS Code Marketplace (prompts for VSCE_PAT)."
+    },
+    {
+      "id": "publish",
+      "label": "🚀 Dual Publish (All)",
+      "text": "$(rocket) PUBLISH ALL",
+      "command": "npm run publish:all",
+      "color": "#D50000",
+      "description": "Package once and publish identical VSIX to both Open VSX and Microsoft VS Code Marketplace.",
+      "tooltip": "Package once and publish identical VSIX to both Open VSX and Microsoft VS Code Marketplace."
+    },
+    {
+      "id": "checkin",
+      "label": "✅ Check In",
+      "text": "$(check) CHECK IN",
+      "command": "python3 /Users/mdzie/GitHub/Mission_Initiation_and_Kommand_Evolution/scripts/run_action.py --action checkin",
+      "color": "#6200EA",
+      "description": "Check in code.",
+      "tooltip": "Check in code"
+    }
+  ]
 }
