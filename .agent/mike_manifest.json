@@ -6,7 +6,7 @@
   "description": "Minimal Intelligent Kuota Extension",
   "git": {
     "remote": "https://github.com/mdziejma/Minimal_Intelligent_Kuota_Extension.git",
-    "default_branch": "Development_7"
+    "default_branch": "Development_8"
   },
   "cloud": {
     "primary_project_id": null,
@@ -37,7 +37,10 @@
     "context_budget": "128k"
   },
   "env_contract": {
-    "required_vars": [],
+    "required_vars": [
+      "OVSX_PAT",
+      "VSCE_PAT"
+    ],
     "sample_file": null
   },
   "security_watch": {
@@ -48,27 +51,52 @@
     "requires_gpu": false,
     "gpu_frameworks": []
   },
-  "subcomponents": [],
+  "subcomponents": [
+    {
+      "name": "scripts",
+      "type": "local_scripts",
+      "path": "scripts"
+    }
+  ],
   "actions": {
-    "beaker test": {
-      "label": "$(beaker) TEST",
+    "build": {
+      "label": "\ud83d\udd28 Build",
+      "command": "npm run compile",
+      "tooltip": "Bundle TypeScript sources into ./dist/extension.js."
+    },
+    "test": {
+      "label": "\ud83e\uddea Run Tests",
       "command": "npm test",
       "tooltip": "Run Unit Tests & Lint"
     },
-    "bug debug": {
-      "label": "$(bug) DEBUG",
+    "debug": {
+      "label": "\ud83d\udc1b Debug Extension",
       "command": "workbench.action.debug.start",
       "tooltip": "Launch Extension Host Debugger (F5)"
     },
-    "check check in": {
-      "label": "$(check) CHECK IN",
-      "command": "python3 /Users/mdzie/GitHub/Mission_Initiation_and_Kommand_Evolution/scripts/run_action.py --action checkin",
-      "tooltip": "Check in code"
+    "package": {
+      "label": "\ud83d\udce6 Package VSIX",
+      "command": "npm run package",
+      "tooltip": "Compile and package standalone .vsix extension bundle."
     },
-    "rocket deploy": {
-      "label": "$(rocket) DEPLOY",
-      "command": "python3 /Users/mdzie/GitHub/Mission_Initiation_and_Kommand_Evolution/scripts/run_action.py --action deploy",
-      "tooltip": "Package VSIX & Deploy Extension"
+    "publish_ovsx": {
+      "label": "\ud83c\udf10 Publish Open VSX",
+      "command": "npm run publish:ovsx",
+      "tooltip": "Publish packaged VSIX artifact to Open VSX Registry (prompts for PAT)."
+    },
+    "publish_vscode": {
+      "label": "\ud83d\udecd\ufe0f Publish MS Marketplace",
+      "command": "npm run publish:vscode",
+      "tooltip": "Publish packaged VSIX artifact to Microsoft VS Code Marketplace (prompts for VSCE_PAT)."
+    },
+    "publish": {
+      "label": "\ud83d\ude80 Dual Publish (All)",
+      "command": "npm run publish:all",
+      "tooltip": "Package once and publish identical VSIX to both Open VSX and Microsoft VS Code Marketplace."
+    },
+    "checkin": {
+      "command": "git add . && git commit -m 'wip' && git push",
+      "label": "Checkin"
     },
     "server": {
       "command": "npm run watch",
@@ -77,14 +105,6 @@
     "deploy": {
       "command": "npm run compile && npx @vscode/vsce package",
       "label": "Deploy"
-    },
-    "checkin": {
-      "command": "git add . && git commit -m 'wip' && git push",
-      "label": "Checkin"
-    },
-    "test": {
-      "command": "npm run test",
-      "label": "Test"
     }
   }
 }

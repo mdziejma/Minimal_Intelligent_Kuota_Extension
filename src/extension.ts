@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import * as https from 'https';
+import * as http from 'http';
 import { exec } from 'child_process';
-import { parseWindowsProcessList, parseWindowsPort, parseUnixProcessList, parseUnixPort } from './parser';
+import { parseWindowsProcessList, parseWindowsPorts, parseUnixProcessList, parseUnixPorts } from './parser';
 import { formatTimeRemaining, isDailyModel, isWeeklyModel, isExternalModel, selectBestModel } from './quotaUtils';
 
 let dailyStatusBarItem: vscode.StatusBarItem;
@@ -206,59 +207,27 @@ async function updateQuotaData(context: vscode.ExtensionContext, manual: boolean
     lastFetchTime = now;
 
     try {
-        const { port, csrfToken } = await findLanguageServerInfo();
+        const { ports, csrfToken } = await findLanguageServerInfo();
 
         // Fetch new quota summary
         let summaryRes: any = null;
         try {
-            summaryRes = await fetchEndpoint(port, csrfToken, '/exa.language_server_pb.LanguageServerService/RetrieveUserQuotaSummary');
-        } catch (e: any) {
+            summaryRes = await fetchEndpoint(ports, csrfToken, '/exa.language_server_pb.LanguageServerService/RetrieveUserQuotaSummary');
+        } catch {
             // Ignore error, will fallback
         }
 
-        const cascadeData = await fetchEndpoint(port, csrfToken, '/exa.language_server_pb.LanguageServerService/GetCascadeModelConfigData');
+        const cascadeData = await fetchEndpoint(ports, csrfToken, '/exa.language_server_pb.LanguageServerService/GetCascadeModelConfigData');
         const allModels = cascadeData.clientModelConfigs || [];
 
-        let userStatusData: any = null;
-        try {
-            userStatusData = await fetchEndpoint(port, csrfToken, '/exa.language_server_pb.LanguageServerService/GetUserStatus');
-        } catch (e: any) {
-            userStatusData = { error: e.message };
-        }
-
-        const candidates = [
-            '/exa.language_server_pb.LanguageServerService/RetrieveUserQuotaSummary',
-            '/exa.language_server_pb.LanguageServerService/GetUserQuota',
-            '/exa.language_server_pb.LanguageServerService/GetUserQuotaList',
-            '/exa.language_server_pb.LanguageServerService/GetUserQuotas',
-            '/exa.language_server_pb.LanguageServerService/GetModelQuotas',
-            '/exa.language_server_pb.LanguageServerService/GetTierQuota',
-            '/exa.language_server_pb.LanguageServerService/GetQuotaInfo',
-            '/exa.language_server_pb.LanguageServerService/GetQuota',
-            '/exa.language_server_pb.LanguageServerService/GetCommandModelConfigs'
-        ];
-        const candidateResults: any = {};
-        for (const ep of candidates) {
-            try {
-                const res = await fetchEndpoint(port, csrfToken, ep);
-                candidateResults[ep] = res;
-            } catch (e: any) {
-                // Ignore failed endpoints
-            }
-        }
-
-        const extList = vscode.extensions.all.map(e => `${e.id} (active: ${e.isActive})`);
-        const geminiExt = vscode.extensions.getExtension('google.geminicodeassist') || vscode.extensions.getExtension('antigravity');
+        const geminiExt = vscode.extensions.getExtension('google.geminicodeassist') || vscode.extensions.getExtension('antigravity') || vscode.extensions.getExtension('google.agy');
 
         const debugLogContent = [
             `=== Quota Refresh [${new Date().toLocaleTimeString()}] ===`,
             `Active Model ID: ${activeModelId}`,
             `Total Models: ${allModels.length}`,
             `Target Extension: ${geminiExt?.id} (active: ${geminiExt?.isActive})`,
-            `Target Exports: ${JSON.stringify(geminiExt?.exports)}`,
             `Quota Summary Response:\n${JSON.stringify(summaryRes, null, 2)}`,
-            `Candidate Probes Succeeded:\n${JSON.stringify(candidateResults, null, 2)}`,
-            `GetUserStatus Response:\n${JSON.stringify(userStatusData, null, 2)}`,
             `Raw Cascade Data:\n${JSON.stringify(cascadeData, null, 2)}`
         ].join('\n\n');
 
@@ -455,26 +424,36 @@ function checkAlerts(key: string, data: any) {
     lastKnownPercentages[key] = percentage;
 }
 
-function findLanguageServerInfo(): Promise<{ port: number; csrfToken: string }> {
+function findLanguageServerInfo(): Promise<{ port: number; ports: number[]; csrfToken: string }> {
     return new Promise((resolve, reject) => {
         const isWindows = process.platform === 'win32';
 
         if (isWindows) {
-            const psCommand = `powershell -Command "Get-WmiObject Win32_Process -Filter \\"Name LIKE 'language_server_windows%'\\" | Select-Object CommandLine, ProcessId | ConvertTo-Json"`;
+            const psCommand = `powershell -Command "Get-WmiObject Win32_Process -Filter \\"Name LIKE 'language_server%' OR Name LIKE 'agy%' OR CommandLine LIKE '%--csrf_token%'\\" | Select-Object CommandLine, ProcessId | ConvertTo-Json"`;
             exec(psCommand, (psError, psStdout) => {
                 if (psError || !psStdout) return reject(new Error("Language Server not running (or PowerShell failed)."));
 
                 try {
-                    const { pid, csrfToken } = parseWindowsProcessList(psStdout);
+                    const { pid, csrfToken, hubPort, extensionServerPort } = parseWindowsProcessList(psStdout);
+                    const fallbackPorts = [hubPort, extensionServerPort].filter((p): p is number => typeof p === 'number');
 
                     const netstatCommand = `netstat -ano | findstr LISTENING | findstr ${pid}`;
                     exec(netstatCommand, (nsError, nsStdout) => {
-                        if (nsError || !nsStdout) return reject(new Error("No network ports found for LS PID."));
+                        if (nsError || !nsStdout) {
+                            if (fallbackPorts.length > 0) {
+                                return resolve({ port: fallbackPorts[0], ports: fallbackPorts, csrfToken });
+                            }
+                            return reject(new Error("No network ports found for LS PID."));
+                        }
 
                         try {
-                            const port = parseWindowsPort(nsStdout);
-                            resolve({ port, csrfToken });
+                            const discoveredPorts = parseWindowsPorts(nsStdout);
+                            const allPorts = Array.from(new Set([...discoveredPorts, ...fallbackPorts]));
+                            resolve({ port: allPorts[0], ports: allPorts, csrfToken });
                         } catch (e: any) {
+                            if (fallbackPorts.length > 0) {
+                                return resolve({ port: fallbackPorts[0], ports: fallbackPorts, csrfToken });
+                            }
                             reject(e);
                         }
                     });
@@ -483,21 +462,31 @@ function findLanguageServerInfo(): Promise<{ port: number; csrfToken: string }> 
                 }
             });
         } else {
-            const psCommand = "ps aux | grep -v grep | grep -E 'language_server_macos|language_server_macos_arm|language_server_linux'";
+            const psCommand = "ps aux | grep -v grep | grep -E 'language_server|agy.*--hub|--csrf_token'";
             exec(psCommand, (psError, psStdout) => {
                 if (psError || !psStdout) return reject(new Error("Language Server not running."));
 
                 try {
-                    const { pid, csrfToken } = parseUnixProcessList(psStdout);
+                    const { pid, csrfToken, hubPort, extensionServerPort } = parseUnixProcessList(psStdout);
+                    const fallbackPorts = [hubPort, extensionServerPort].filter((p): p is number => typeof p === 'number');
 
-                    const lsofCommand = `lsof -i -P -n -a -p ${pid} | grep LISTEN`;
+                    const lsofCommand = `PATH=$PATH:/usr/sbin:/sbin lsof -i -P -n -a -p ${pid} | grep LISTEN`;
                     exec(lsofCommand, (lsofError, lsofStdout) => {
-                        if (lsofError || !lsofStdout) return reject(new Error("No network ports found for LS."));
+                        if (lsofError || !lsofStdout) {
+                            if (fallbackPorts.length > 0) {
+                                return resolve({ port: fallbackPorts[0], ports: fallbackPorts, csrfToken });
+                            }
+                            return reject(new Error("No network ports found for LS."));
+                        }
 
                         try {
-                            const port = parseUnixPort(lsofStdout);
-                            resolve({ port, csrfToken });
+                            const discoveredPorts = parseUnixPorts(lsofStdout);
+                            const allPorts = Array.from(new Set([...discoveredPorts, ...fallbackPorts]));
+                            resolve({ port: allPorts[0], ports: allPorts, csrfToken });
                         } catch (e: any) {
+                            if (fallbackPorts.length > 0) {
+                                return resolve({ port: fallbackPorts[0], ports: fallbackPorts, csrfToken });
+                            }
                             reject(e);
                         }
                     });
@@ -509,10 +498,12 @@ function findLanguageServerInfo(): Promise<{ port: number; csrfToken: string }> 
     });
 }
 
-function fetchEndpoint(port: number, csrfToken: string, endpoint: string): Promise<any> {
+let cachedWorkingEndpoint: { port: number; proto: 'https' | 'http'; csrfToken: string } | undefined;
+
+function requestOnce(proto: 'https' | 'http', port: number, csrfToken: string, endpoint: string): Promise<any> {
     return new Promise((resolve, reject) => {
         const postData = JSON.stringify({});
-        const options = {
+        const options: https.RequestOptions = {
             hostname: '127.0.0.1',
             port: port,
             path: endpoint,
@@ -525,7 +516,8 @@ function fetchEndpoint(port: number, csrfToken: string, endpoint: string): Promi
             }
         };
 
-        const req = https.request(options, (res) => {
+        const client = proto === 'https' ? https : http;
+        const req = client.request(options, (res) => {
             let body = '';
             res.on('data', (chunk) => body += chunk);
             res.on('end', () => {
@@ -540,6 +532,32 @@ function fetchEndpoint(port: number, csrfToken: string, endpoint: string): Promi
         req.end();
         req.setTimeout(5000, () => req.destroy());
     });
+}
+
+async function fetchEndpoint(portOrPorts: number | number[], csrfToken: string, endpoint: string): Promise<any> {
+    const ports = Array.isArray(portOrPorts) ? portOrPorts : [portOrPorts];
+
+    if (cachedWorkingEndpoint && cachedWorkingEndpoint.csrfToken === csrfToken && ports.includes(cachedWorkingEndpoint.port)) {
+        try {
+            return await requestOnce(cachedWorkingEndpoint.proto, cachedWorkingEndpoint.port, csrfToken, endpoint);
+        } catch {
+            cachedWorkingEndpoint = undefined;
+        }
+    }
+
+    let lastError: any;
+    for (const port of ports) {
+        for (const proto of ['https', 'http'] as const) {
+            try {
+                const res = await requestOnce(proto, port, csrfToken, endpoint);
+                cachedWorkingEndpoint = { port, proto, csrfToken };
+                return res;
+            } catch (e) {
+                lastError = e;
+            }
+        }
+    }
+    throw lastError || new Error("Failed to connect to Language Server.");
 }
 
 export function deactivate() {

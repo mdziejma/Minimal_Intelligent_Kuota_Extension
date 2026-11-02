@@ -47,6 +47,24 @@ describe('Parser logic', () => {
             expect(result.csrfToken).to.equal('unix-token-456');
         });
 
+        it('should parse Antigravity agy --hub process with equals-sign flags', () => {
+            const mockStdout = [
+                "user      7845  1.7  1.5 437370672 384096 ?? S 11:20AM 1:00.06 /Applications/Antigravity.app/Contents/Resources/bin/language_server --standalone --csrf_token standalone-token-123",
+                "user     13566  0.1  1.2 437188688 301504 ?? S  1:56PM 0:01.64 /Users/user/.gemini/bin/agy --hub --hub-port=56444 --app_data_dir=antigravity --csrf_token=hub-token-789"
+            ].join('\n');
+            const result = parseUnixProcessList(mockStdout);
+            expect(result.pid).to.equal(13566);
+            expect(result.csrfToken).to.equal('hub-token-789');
+            expect(result.hubPort).to.equal(56444);
+        });
+
+        it('should parse standalone language_server process without _macos suffix', () => {
+            const mockStdout = "user      7845  1.7  1.5 437370672 384096 ?? S 11:20AM 1:00.06 /Applications/Antigravity.app/Contents/Resources/bin/language_server --standalone --csrf_token standalone-token-123";
+            const result = parseUnixProcessList(mockStdout);
+            expect(result.pid).to.equal(7845);
+            expect(result.csrfToken).to.equal('standalone-token-123');
+        });
+
         it('should parse Unix port from lsof correctly', () => {
             const mockStdout = "language_ 12345 user 3u IPv4 0x1234 0t0 TCP 127.0.0.1:54321 (LISTEN)";
             const port = parseUnixPort(mockStdout);
