@@ -103,7 +103,7 @@
       "label": "Start Server"
     },
     "deploy": {
-      "command": "npm run compile && npx @vscode/vsce package",
+      "command": "npm run publish:all",
       "label": "Deploy"
     }
   }
